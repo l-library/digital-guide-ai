@@ -23,12 +23,19 @@ Page {
                 onClicked: root.navigateBack()
             }
 
+            Item {
+                Layout.fillWidth: true
+            }
+
             Label {
                 text: qsTr("设置")
                 font.pixelSize: 18
                 font.bold: true
-                Layout.fillWidth: true
                 elide: Label.ElideRight
+            }
+
+            Item {
+                Layout.fillWidth: true
             }
         }
     }
@@ -104,6 +111,12 @@ Page {
                             Layout.fillWidth: true
                             height: 48
 
+                            onClicked: {
+                                if (modelData.id !== settingsManager.currentDigitalHumanId) {
+                                    settingsManager.switchDigitalHuman(modelData.id)
+                                }
+                            }
+
                             RowLayout {
                                 anchors.fill: parent
                                 anchors.leftMargin: 8
@@ -111,6 +124,7 @@ Page {
 
                                 Rectangle {
                                     width: 36; height: 36; radius: 18
+                                    Layout.alignment: Qt.AlignLeft
                                     color: modelData.id === settingsManager.currentDigitalHumanId
                                            ? Material.accent : Material.color(Material.Grey, Material.Shade300)
 
@@ -126,6 +140,7 @@ Page {
                                 ColumnLayout {
                                     spacing: 2
                                     Layout.fillWidth: true
+                                    Layout.minimumWidth: 100
                                     Label {
                                         text: modelData.name
                                         font.pixelSize: 15
@@ -138,11 +153,24 @@ Page {
                                     }
                                 }
 
-                                RadioButton {
-                                    checked: modelData.id === settingsManager.currentDigitalHumanId
-                                    onCheckedChanged: {
-                                        if (checked)
-                                            settingsManager.switchDigitalHuman(modelData.id)
+                                // 自定义指示器
+                                Rectangle {
+                                    width: 20
+                                    height: 20
+                                    radius: 10
+                                    border.width: 1
+                                    border.color: modelData.id === settingsManager.currentDigitalHumanId
+                                                  ? Material.accent : "#999"
+                                    color: "transparent"
+                                    Layout.alignment: Qt.AlignRight
+
+                                    Rectangle {
+                                        width: 12
+                                        height: 12
+                                        radius: width/2
+                                        anchors.centerIn: parent
+                                        visible: modelData.id === settingsManager.currentDigitalHumanId
+                                        color: Material.accent
                                     }
                                 }
                             }

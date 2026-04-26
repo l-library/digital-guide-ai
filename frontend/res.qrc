@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>asset/distress.png</file>
+        <file>asset/avatar.jpeg</file>
+    </qresource>
+</RCC>

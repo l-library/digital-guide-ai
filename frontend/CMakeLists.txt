@@ -6,7 +6,9 @@ set(QT_ANDROID_BUILD_ALL_ABIS TRUE)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network)
+set(CMAKE_AUTORCC ON)
+
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network QuickEffects)
 
 qt_standard_project_setup(REQUIRES 6.10)
 
@@ -19,6 +21,7 @@ qt_add_executable(appdigital_guide_ai
     src/settingsmanager.cpp
     src/voiceinterface.cpp
     src/digitalhumanmanager.cpp
+    res.qrc
 )
 
 qt_add_qml_module(appdigital_guide_ai
@@ -31,8 +34,9 @@ qt_add_qml_module(appdigital_guide_ai
         qml/HistoryPage.qml
         qml/SettingsPage.qml
         qml/components/MessageBubble.qml
-        qml/components/DigitalHumanAvatar.qml
+
         SOURCES src/apiservice.cpp src/apiservice.h src/conversationmanager.cpp src/conversationmanager.h src/digitalhumanmanager.cpp src/digitalhumanmanager.h src/historymanager.cpp src/historymanager.h src/loginmanager.cpp src/loginmanager.h src/settingsmanager.cpp src/settingsmanager.h src/voiceinterface.cpp src/voiceinterface.h
+        QML_FILES
 )
 
 set_target_properties(appdigital_guide_ai PROPERTIES
@@ -44,7 +48,7 @@ set_target_properties(appdigital_guide_ai PROPERTIES
 )
 
 target_link_libraries(appdigital_guide_ai
-    PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Network
+    PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::QuickEffects
 )
 
 install(TARGETS appdigital_guide_ai
