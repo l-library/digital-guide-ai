@@ -20,15 +20,7 @@ Page {
             spacing: 5
 
             ToolButton {
-                text: qsTr("☰")
-                font.pixelSize: 20
-                contentItem: Text {
-                    text: qsTr("☰")
-                    font.pixelSize: 20
-                    color: "white"
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
+                icon.source: "qrc:/asset/menu.png"
                 onClicked: drawer.open()
             }
 
@@ -65,15 +57,7 @@ Page {
             }
 
             ToolButton {
-                text: qsTr("🔄")
-                font.pixelSize: 18
-                contentItem: Text {
-                    text: qsTr("🔄")
-                    font.pixelSize: 18
-                    color: "white"
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
+                icon.source: "qrc:/asset/exchange.png"
                 onClicked: {
                     if (digitalHumanManager && digitalHumanManager.digitalHumans.length > 0) {
                         digitalHumanManager.switchTo(
@@ -94,9 +78,9 @@ Page {
             topMargin: 40
 
             model: ListModel {
-                ListElement { icon: "💬"; label: "新对话"; action: "newChat" }
-                ListElement { icon: "📋"; label: "历史记录"; action: "history" }
-                ListElement { icon: "⚙️"; label: "设置"; action: "settings" }
+                ListElement { iconSource: "qrc:/asset/new.png"; label: "新对话"; action: "newChat" }
+                ListElement { iconSource: "qrc:/asset/history.png"; label: "历史记录"; action: "history" }
+                ListElement { iconSource: "qrc:/asset/setting.png"; label: "设置"; action: "settings" }
             }
 
             delegate: ItemDelegate {
@@ -107,16 +91,42 @@ Page {
                     anchors.fill: parent
                     anchors.leftMargin: 24
                     spacing: 16
+                    Rectangle {
+                        width: 28
+                        height: 28
+                        color: "transparent"
 
-                    Text {
-                        text: model.icon
-                        font.pixelSize: 22
+                        Image {
+                            id: menuIcon
+                            source: model.iconSource
+                            anchors.fill: parent
+                            fillMode: Image.PreserveAspectFit
+                            smooth: true
+                            sourceSize.width: width * 2
+                            sourceSize.height: height * 2
+                            asynchronous: true
+
+                            // 加载失败时显示默认图标
+                            onStatusChanged: {
+                                if (status === Image.Error) {
+                                    source = "qrc:/asset/failure.png"
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            anchors.fill: parent
+                            color: "#eee"
+                            visible: menuIcon.status === Image.Loading
+                            radius: 4
+                        }
                     }
 
                     Label {
                         text: model.label
                         font.pixelSize: 16
                         Layout.fillWidth: true
+                        verticalAlignment: Text.AlignVCenter
                     }
 
                     Text {

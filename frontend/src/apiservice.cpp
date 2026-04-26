@@ -5,6 +5,12 @@
 #include <QTimer>
 #include <QDebug>
 
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+
 ApiService &ApiService::instance()
 {
     static ApiService inst;
@@ -156,19 +162,37 @@ void ApiService::addMessage(int conversationId, const QString &role, const QStri
 
 void ApiService::sendAiMessage(int conversationId, const QString &userMessage, int digitalHumanId)
 {
-    Q_UNUSED(userMessage);
+    QTimer::singleShot(0, this, [this, conversationId, digitalHumanId, userMessage]() {
+        QString dhName = "231";
 
-    QTimer::singleShot(0, this, [this, conversationId, digitalHumanId]() {
-        QString dhName = QStringLiteral("小导");
-        for (const auto &dh : m_stubDigitalHumans) {
-            QVariantMap dhm = dh.toMap();
-            if (dhm["id"].toInt() == digitalHumanId) {
-                dhName = dhm["name"].toString();
-                break;
+        QNetworkAccessManager *manager = new QNetworkAccessManager(this);
+        QNetworkRequest request;
+        request.setUrl(QUrl("http://8.136.128.80:8000/chat"));
+        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+        QJsonObject requestData;
+        requestData["content"] = userMessage;
+        QByteArray data = QJsonDocument(requestData).toJson();
+
+        QNetworkReply *reply = manager->post(request, data);
+
+        // 关键修正：捕获需要的值，而不是引用
+        connect(reply, &QNetworkReply::finished, this, [this, conversationId, reply, manager]() {
+            if (reply->error() == QNetworkReply::NoError) {
+                QByteArray responseData = reply->readAll();
+                QJsonDocument jsonResponse = QJsonDocument::fromJson(responseData);
+                QString content = jsonResponse.object()["content"].toString();
+
+                // 在这里发送信号
+                emit aiResponseReceived(conversationId, content, "ai");
+            } else {
+                qDebug() << "HTTP error:" << reply->errorString();
+                emit aiResponseReceived(conversationId, "抱歉，服务暂时不可用", "ai");
             }
-        }
-        QString response = QStringLiteral("你好！我是%1，很高兴为你服务！").arg(dhName);
-        emit aiResponseReceived(conversationId, response, "ai");
+            reply->deleteLater();
+            manager->deleteLater(); // 清理manager
+        });
+        // 不需要立即emit
     });
 }
 

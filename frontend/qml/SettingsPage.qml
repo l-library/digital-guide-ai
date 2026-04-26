@@ -189,7 +189,8 @@ Page {
                     spacing: 8
 
                     Button {
-                        text: qsTr("📄 上传文档")
+                        text: qsTr("上传文档")
+                        icon.source: "qrc:/asset/upload.png"
                         Layout.fillWidth: true
                         font.pixelSize: 14
                         flat: true
@@ -249,7 +250,8 @@ Page {
 
                     ItemDelegate {
                         Layout.fillWidth: true
-                        text: qsTr("📊 数据大屏")
+                        text: qsTr("数据大屏")
+                        icon.source: "qrc:/asset/data.png"
                         font.pixelSize: 14
                         onClicked: settingsManager.openDataDashboard()
                     }
@@ -262,7 +264,8 @@ Page {
 
                     ItemDelegate {
                         Layout.fillWidth: true
-                        text: qsTr("🚪 退出登录")
+                        text: qsTr("退出登录")
+                        icon.source: "qrc:/asset/exit.png"
                         font.pixelSize: 14
                         Material.foreground: Material.Red
                         onClicked: {
