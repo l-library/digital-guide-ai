@@ -167,7 +167,7 @@ void ApiService::sendAiMessage(int conversationId, const QString &userMessage, i
 
         QNetworkAccessManager *manager = new QNetworkAccessManager(this);
         QNetworkRequest request;
-        request.setUrl(QUrl("http://8.136.128.80:8000/chat"));
+        request.setUrl(QUrl("http://121.43.27.51:8000/chat"));
         request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
         QJsonObject requestData;

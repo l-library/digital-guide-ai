@@ -12,6 +12,8 @@ if __name__ == "__main__":
     print("正在本地脚本中预热模型...")
     _get_stores()  # 手动触发加载
     print("预热完毕，开始测速！\n")
+
+
 def test(query: str):
     print(f"问题：{query}")
     print("=" * 40)
@@ -35,6 +37,7 @@ def test(query: str):
 
     print(f"总耗时：{t4 - start:.2f}秒")
     print(f"\n回答：{answer}")
+
 
 if __name__ == "__main__":
     test("门票多少钱")
