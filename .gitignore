@@ -1,0 +1,17 @@
+.env
+
+vector_store/
+models/
+
+logs/
+data/temp_audios/
+*.wav
+*.mp3
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.vscode/
+.idea/
