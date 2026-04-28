@@ -9,7 +9,12 @@ model_path = os.path.join(project_root, "models", "bge-small-zh-v1.5")
 print(f"正在从本地加载模型，路径为: {model_path}")
 
 # 配置文件里定义好的各级标题
-from config_guide import DOC_TITLE_BLACKBALL, CHAPTER_HEADERS, SUB_BLOCK_TRIGGERS, CATEGORY_MAP
+from config_guide import (
+    DOC_TITLE_BLACKBALL,
+    CHAPTER_HEADERS,
+    SUB_BLOCK_TRIGGERS,
+    CATEGORY_MAP,
+)
 
 
 from docx import Document
@@ -21,11 +26,12 @@ from langchain_core.documents import Document as LangchainDocument
 import re
 
 
-DOCX_PATH = "data/灵山胜境：历史、文化、景点特色与个性化游览指南.docx"
-VECTOR_STORE_PATH = "vector_store/lingshan"
+DOCX_PATH = "../data/灵山胜境：历史、文化、景点特色与个性化游览指南.docx"
+VECTOR_STORE_PATH = "../vector_store/lingshan"
 
 
 # 1. 定义表格处理函数
+
 
 def table_to_text(table) -> str:
     """把表格转成自然语言字符串，供合并节内容时使用"""
@@ -54,8 +60,7 @@ def table_to_text(table) -> str:
     else:
         for row in rows:
             seen = set()
-            cells = [c for c in row if c and c not in seen
-                     and not seen.add(c)]
+            cells = [c for c in row if c and c not in seen and not seen.add(c)]
             if cells:
                 lines.append("；".join(cells))
 
@@ -91,44 +96,49 @@ def table_to_rows(table) -> list[dict]:
                     pairs.append(f"{header}：{cell}")
                     seen.add(cell)
             if pairs:
-                result.append({
-                    "row_label": label,
-                    "row_text": "；".join(pairs),
-                })
+                result.append(
+                    {
+                        "row_label": label,
+                        "row_text": "；".join(pairs),
+                    }
+                )
     else:
         for row in rows:
             seen = set()
-            cells = [c for c in row if c and c not in seen
-                     and not seen.add(c)]
+            cells = [c for c in row if c and c not in seen and not seen.add(c)]
             if cells:
-                result.append({
-                    "row_label": cells[0],
-                    "row_text": "；".join(cells),
-                })
+                result.append(
+                    {
+                        "row_label": cells[0],
+                        "row_text": "；".join(cells),
+                    }
+                )
 
     return result
 
 
 # 2. 提取原始block
 
+
 def extract_raw_blocks(docx_path: str) -> list[dict]:
     """按文档原始顺序提取所有段落和表格"""
     doc = Document(docx_path)
     blocks = []
-    
+
     # 建立表格元素的映射字典，为了保持原始顺序
     table_dict = {tbl._element: tbl for tbl in doc.tables}
-    
+
     # 遍历文档的主体元素（包含段落和表格），保证提取顺序不乱
     for element in doc.element.body:
         if element.tag.endswith("}p"):
             # 如果是段落 (Paragraph)
             from docx.text.paragraph import Paragraph
+
             para = Paragraph(element, doc._part)
             text = para.text.strip()
             if text:
                 blocks.append({"type": "text", "content": text})
-                
+
         elif element.tag.endswith("}tbl"):
             # 如果是表格 (Table)
             if element in table_dict:
@@ -142,25 +152,28 @@ def extract_raw_blocks(docx_path: str) -> list[dict]:
 
 # 3. 标题判断、大类映射、合并为节
 
+
 def is_heading(text: str) -> bool:
     """判断一段文本是否是标题"""
-    if len(text) > 40: # 太长的不是标题
+    if len(text) > 40:  # 太长的不是标题
         return False
-    if text.endswith("：") or text.endswith(":"): # 冒号结尾的不是标题
+    if text.endswith("：") or text.endswith(":"):  # 冒号结尾的不是标题
         return False
-    if text.count("，") + text.count(",") > 1: # 带很多逗号的不是标题
+    if text.count("，") + text.count(",") > 1:  # 带很多逗号的不是标题
         return False
-    content_patterns = [ # 再手动排除一些不是标题的（可能不太灵活，我这里为了方便直接写死了）
-        r"^\d{4}",
-        r"^在",
-        r"^路线规划",
-        r"^讲解重点",
-        r"^特色体验",
-        r"^[•\-\*]",
-        r"^参与",
-        r"^观赏",
-        r"^漫步",
-    ]
+    content_patterns = (
+        [  # 再手动排除一些不是标题的（可能不太灵活，我这里为了方便直接写死了）
+            r"^\d{4}",
+            r"^在",
+            r"^路线规划",
+            r"^讲解重点",
+            r"^特色体验",
+            r"^[•\-\*]",
+            r"^参与",
+            r"^观赏",
+            r"^漫步",
+        ]
+    )
     for pattern in content_patterns:
         if re.match(pattern, text):
             return False
@@ -195,6 +208,7 @@ def merge_blocks_into_sections(raw_blocks: list[dict]) -> list[dict]:
     tbl_counter = 0
 
     current_table_indices = []
+
     def flush():
         nonlocal current_macro_title
         if not current_lines:
@@ -204,10 +218,10 @@ def merge_blocks_into_sections(raw_blocks: list[dict]) -> list[dict]:
         if DOC_TITLE_BLACKBALL in current_title:
             return
 
-        # B. 章节识别逻辑 
+        # B. 章节识别逻辑
         # 检查当前标题是否属于预设的五个大章节之一
         is_chapter = any(ch in current_title for ch in CHAPTER_HEADERS)
-        
+
         if is_chapter:
             # 如果是大章节，它本身就是最高级
             current_macro_title = current_title
@@ -228,14 +242,16 @@ def merge_blocks_into_sections(raw_blocks: list[dict]) -> list[dict]:
 
         if current_text_lines:
             current_text_lines[0] = breadcrumb
-        sections.append({
-            "section_title": breadcrumb,
-            "content": "\n".join(current_lines),
-            "text_content": "\n".join(current_text_lines),
-            "has_table": current_has_table,
-            "source_types": list(current_types),
-            "table_indices": list(current_table_indices),
-        })
+        sections.append(
+            {
+                "section_title": breadcrumb,
+                "content": "\n".join(current_lines),
+                "text_content": "\n".join(current_text_lines),
+                "has_table": current_has_table,
+                "source_types": list(current_types),
+                "table_indices": list(current_table_indices),
+            }
+        )
 
     for block in raw_blocks:
         text = block["content"]
@@ -255,14 +271,14 @@ def merge_blocks_into_sections(raw_blocks: list[dict]) -> list[dict]:
             elif block["type"] == "table":
                 current_has_table = True
                 current_table_indices.append(tbl_counter)
-                tbl_counter+=1
+                tbl_counter += 1
 
     flush()
     return sections
 
 
-
 # 4. 构造父子文档
+
 
 def sections_to_documents_hierarchical(
     sections: list[dict],
@@ -280,7 +296,6 @@ def sections_to_documents_hierarchical(
         chunk_overlap=30,
         separators=["\n", "。", "；", "，", " ", ""],
     )
-
 
     parent_docs = []
     child_docs = []
@@ -301,16 +316,14 @@ def sections_to_documents_hierarchical(
                     "category": category,
                     "parent_id": parent_id,
                     "is_parent": "true",
-                }
+                },
             )
         )
 
-
         # B. 构造文本子文档（基于业务标识词聚合）
         content_lines = section["content"].split("\n")
-    
-        body_lines = content_lines[1:] if len(content_lines) > 1 else []
 
+        body_lines = content_lines[1:] if len(content_lines) > 1 else []
 
         grouped_chunks = []
         current_sub_title = ""
@@ -318,10 +331,12 @@ def sections_to_documents_hierarchical(
 
         def flush_buffer():
             if current_buffer:
-                grouped_chunks.append({
-                    "sub_title": current_sub_title,
-                    "content": "\n".join(current_buffer)
-                })
+                grouped_chunks.append(
+                    {
+                        "sub_title": current_sub_title,
+                        "content": "\n".join(current_buffer),
+                    }
+                )
                 current_buffer.clear()
 
         for line in body_lines:
@@ -333,13 +348,17 @@ def sections_to_documents_hierarchical(
             is_trigger = False
             for trigger in SUB_BLOCK_TRIGGERS:
                 # 兼容中文冒号、英文冒号以及空格
-                if line.startswith(trigger) and (len(line) == len(trigger) or line[len(trigger):].strip().startswith("：") or line[len(trigger):].strip().startswith(":")):
+                if line.startswith(trigger) and (
+                    len(line) == len(trigger)
+                    or line[len(trigger) :].strip().startswith("：")
+                    or line[len(trigger) :].strip().startswith(":")
+                ):
                     flush_buffer()
                     current_sub_title = trigger
-                    current_buffer.append(line) # 将标题行也保留在内容中
+                    current_buffer.append(line)  # 将标题行也保留在内容中
                     is_trigger = True
                     break
-            
+
             if not is_trigger:
                 # 如果不是新标题，就继续往当前的 buffer 里塞
                 current_buffer.append(line)
@@ -351,16 +370,16 @@ def sections_to_documents_hierarchical(
         for j, chunk_data in enumerate(grouped_chunks):
             sub_title = chunk_data["sub_title"]
             chunk_content = chunk_data["content"]
-            
+
             # 将子标题加入面包屑中
             if sub_title:
                 child_breadcrumb = f"{breadcrumb} > {sub_title}"
             else:
                 child_breadcrumb = breadcrumb
-                
+
             # 最终的检索文本结构：
             final_page_content = f"{child_breadcrumb}\n{chunk_content}"
-            
+
             child_docs.append(
                 LangchainDocument(
                     page_content=final_page_content,
@@ -373,7 +392,7 @@ def sections_to_documents_hierarchical(
                         "is_parent": "false",
                         "content_type": "text_segment",
                         "chunk_index": j,
-                    }
+                    },
                 )
             )
         # C. 构造“表格”子文档（实现“一行一拆”）
@@ -392,7 +411,7 @@ def sections_to_documents_hierarchical(
                     # 强制每一行表格都带上面包屑标题
                     # 这里直接使用上面已经定义好的 breadcrumb 变量
                     table_row_content = f"{breadcrumb} —— {row['row_text']}"
-                    
+
                     child_docs.append(
                         LangchainDocument(
                             page_content=table_row_content,
@@ -403,8 +422,8 @@ def sections_to_documents_hierarchical(
                                 "section": breadcrumb,
                                 "category": category,
                                 "source": source_filename,
-                                "row_index": k
-                            }
+                                "row_index": k,
+                            },
                         )
                     )
 
@@ -412,6 +431,7 @@ def sections_to_documents_hierarchical(
 
 
 # 5. 写入Chroma
+
 
 def ingest(docx_path: str, vector_store_path: str):
     print("第1步：提取原始block...")
@@ -462,6 +482,7 @@ def ingest(docx_path: str, vector_store_path: str):
 
 
 # 6. 调试和验证
+
 
 def preview_sections(docx_path: str):
     """预览合并后的节，确认标题和内容是否正确"""
@@ -531,4 +552,3 @@ if __name__ == "__main__":
 
     # 第三步：验证父子检索
     # verify_vectorstore(VECTOR_STORE_PATH)
-
