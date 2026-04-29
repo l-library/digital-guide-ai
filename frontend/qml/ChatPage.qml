@@ -11,6 +11,7 @@ Page {
 
     // 属性定义
     property string inputMode: "text"
+    property string outputMode: "digitHuman"
 
     header: ToolBar {
         background: Rectangle { color: "#1976D2" }
@@ -170,19 +171,19 @@ Page {
                 spacing: 8
 
                 Button {
-                    text: qsTr("文字输入")
+                    text: qsTr("数字人")
                     font.pixelSize: 12
                     flat: true
-                    highlighted: root.inputMode === "text"
-                    onClicked: root.inputMode = "text"
+                    highlighted: root.outputMode === "digitHuman"
+                    onClicked: root.outputMode = "digitHuman"
                 }
 
                 Button {
-                    text: qsTr("语音输入")
+                    text: qsTr("文字输出")
                     font.pixelSize: 12
                     flat: true
-                    highlighted: root.inputMode === "voice"
-                    onClicked: root.inputMode = "voice"
+                    highlighted: root.outputMode === "text"
+                    onClicked: root.outputMode = "text"
                 }
             }
         }
@@ -195,6 +196,7 @@ Page {
             topMargin: 8
             bottomMargin: 8
             spacing: 4
+            visible: root.outputMode === "text"
 
             model: conversationManager ? conversationManager.messages : null
             delegate: MessageBubble {
@@ -214,6 +216,14 @@ Page {
                     Qt.callLater(() => positionViewAtEnd())
                 }
             }
+        }
+
+        Rectangle{
+            id: digitHumanDisplay
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            visible: root.outputMode === "digitHuman"
         }
 
         Rectangle {
@@ -237,6 +247,13 @@ Page {
                     Layout.margins: 8
                     spacing: 8
                     visible: root.inputMode === "text"
+
+                    Button {
+                        icon.source: "qrc:/asset/voice.png"
+                        font.pixelSize: 12
+                        flat: true
+                        onClicked: root.inputMode = "voice"
+                    }
 
                     TextField {
                         id: inputField
@@ -275,6 +292,14 @@ Page {
                     Layout.margins: 8
                     spacing: 8
                     visible: root.inputMode === "voice"
+
+                    Button {
+                        icon.source: "qrc:/asset/text.png"
+                        font.pixelSize: 12
+                        flat: true
+                        visible: root.inputMode = "voice"
+                        onClicked: root.inputMode = "text"
+                    }
 
                     Button {
                         id: recordBtn

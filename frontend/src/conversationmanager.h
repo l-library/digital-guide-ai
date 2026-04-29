@@ -36,6 +36,7 @@ private:
     QVariantList m_messages;
     QString m_currentTitle;
     int m_currentUserId = -1;
+    int m_responseType = 1;
 
     void appendMessage(const QString &role, const QString &content);
 };

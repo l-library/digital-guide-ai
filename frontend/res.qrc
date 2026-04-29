@@ -10,5 +10,7 @@
         <file>asset/failure.png</file>
         <file>asset/history.png</file>
         <file>asset/setting.png</file>
+        <file>asset/text.png</file>
+        <file>asset/voice.png</file>
     </qresource>
 </RCC>

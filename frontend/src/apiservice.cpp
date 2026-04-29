@@ -160,23 +160,28 @@ void ApiService::addMessage(int conversationId, const QString &role, const QStri
     });
 }
 
-void ApiService::sendAiMessage(int conversationId, const QString &userMessage, int digitalHumanId)
+void ApiService::sendAiMessage(int conversationId,
+                               const QString &userMessage,
+                               int digitalHumanId,
+                               int response_type)
 {
-    QTimer::singleShot(0, this, [this, conversationId, digitalHumanId, userMessage]() {
+    QTimer::singleShot(0, this, [this, conversationId, digitalHumanId, userMessage, response_type]() {
         QString dhName = "231";
 
         QNetworkAccessManager *manager = new QNetworkAccessManager(this);
         QNetworkRequest request;
-        request.setUrl(QUrl("http://121.43.27.51:8000/chat"));
+        request.setUrl(QUrl("http://0.0.0.0:8000/api/v1/chat/text"));
         request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
         QJsonObject requestData;
+        requestData["conversation_id"] = conversationId;
+        requestData["response_type"] = response_type;
         requestData["content"] = userMessage;
+        requestData["digital_human_id"] = digitalHumanId;
         QByteArray data = QJsonDocument(requestData).toJson();
 
         QNetworkReply *reply = manager->post(request, data);
 
-        // 关键修正：捕获需要的值，而不是引用
         connect(reply, &QNetworkReply::finished, this, [this, conversationId, reply, manager]() {
             if (reply->error() == QNetworkReply::NoError) {
                 QByteArray responseData = reply->readAll();

@@ -60,7 +60,7 @@ void ConversationManager::sendMessage(const QString &text)
 
     appendMessage("user", text.trimmed());
 
-    ApiService::instance().sendAiMessage(m_currentConversationId, text.trimmed(), 1);
+    ApiService::instance().sendAiMessage(m_currentConversationId, text.trimmed(), 1, m_responseType);
 }
 
 void ConversationManager::loadConversation(int conversationId)

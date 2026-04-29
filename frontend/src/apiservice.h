@@ -26,7 +26,10 @@ public:
 
     // Messages
     void addMessage(int conversationId, const QString &role, const QString &content);
-    void sendAiMessage(int conversationId, const QString &userMessage, int digitalHumanId);
+    void sendAiMessage(int conversationId,
+                       const QString &userMessage,
+                       int digitalHumanId,
+                       int response_type);
 
     // Knowledge docs
     void uploadKnowledgeDoc(int userId, const QString &title, const QString &filePath, const QString &content);
