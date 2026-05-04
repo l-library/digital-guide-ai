@@ -16,4 +16,6 @@ __pycache__/
 .vscode/
 .idea/
 
+*.db
+
 AGENTS.md

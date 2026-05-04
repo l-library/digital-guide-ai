@@ -1,40 +1,89 @@
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, UploadFile, File, Depends
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 import os
 import time
 
+from app.services.rag_service import retrieve_context, build_prompt
+from app.services.llm_service import generate
+from app.database import get_db
+from app.models import Conversation, Message
 # 这部分之后可能要用到，现在还没做好
 # from app.services.asr_service import transcribe_audio
-# from app.services.rag_service import retrieve_context, build_prompt
-# from app.services.llm_service import generate
 # from app.services.tts_service import synthesize_audio
 
-# 声明路由器
 router = APIRouter()
 
-# 专门建一个用来存音频的临时仓库
 TEMP_AUDIO_DIR = "data/temp_audios"
 os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
 
-# 定义前端传来的纯文本 JSON 格式
-class ChatRequest(BaseModel):
+
+class ChatTextRequest(BaseModel):
+    conversation_id: int
+    content: str
+    response_type: int = 1
+    digital_human_id: int = 0
+
+
+class SimpleChatRequest(BaseModel):
     question: str
 
 
-# 接口 1：纯文本问答接口 (方便你用代码或 ApiPost 快速测试大模型逻辑)
+@router.post("/chat/text")
+def handle_text_chat_with_persistence(req: ChatTextRequest, db: Session = Depends(get_db)):
+    user_text = req.content
+    print(f"收到文本提问（对话{req.conversation_id}）：{user_text}")
 
-@router.post("/chat")
-def handle_text_chat(request: ChatRequest):
-    """处理纯文本提问"""
-    user_text = request.question
-    print(f"收到文本提问：{user_text}")
-    
-    # RAG + LLM 逻辑
+    conv = db.query(Conversation).filter(Conversation.id == req.conversation_id).first()
+    if not conv:
+        return {"code": 404, "message": "对话不存在", "data": {}}
+
+    user_msg = Message(
+        conversation_id=req.conversation_id,
+        role="user",
+        content=user_text,
+    )
+    db.add(user_msg)
+    db.commit()
+
     context_list = retrieve_context(user_text)
     prompt = build_prompt(user_text, context_list)
     answer_text = generate(prompt)
-    
+
+    assistant_msg = Message(
+        conversation_id=req.conversation_id,
+        role="assistant",
+        content=answer_text,
+    )
+    db.add(assistant_msg)
+    db.commit()
+    db.refresh(assistant_msg)
+
+    return {
+        "code": 200,
+        "message": "success",
+        "data": {
+            "conversation_id": req.conversation_id,
+            "message_id": assistant_msg.id,
+            "role": "assistant",
+            "content": answer_text,
+            "audio_url": None,
+            "knowledge_sources": ["景区知识库"] if context_list else [],
+        }
+    }
+
+
+@router.post("/chat")
+def handle_text_chat(request: SimpleChatRequest):
+    """纯文本问答（简单版，无持久化，用于快速测试）"""
+    user_text = request.question
+    print(f"收到文本提问：{user_text}")
+
+    context_list = retrieve_context(user_text)
+    prompt = build_prompt(user_text, context_list)
+    answer_text = generate(prompt)
+
     return {
         "status": "success",
         "question": user_text,

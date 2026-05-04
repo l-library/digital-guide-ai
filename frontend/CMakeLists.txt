@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network QuickEffects)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network WebSockets QuickEffects)
 
 qt_standard_project_setup(REQUIRES 6.10)
 
@@ -48,7 +48,7 @@ set_target_properties(appdigital_guide_ai PROPERTIES
 )
 
 target_link_libraries(appdigital_guide_ai
-    PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::QuickEffects
+    PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::WebSockets Qt6::QuickEffects
 )
 
 install(TARGETS appdigital_guide_ai
