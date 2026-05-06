@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QVariantList>
 #include <QVariantMap>
+#include <QStringList>
 
 class ConversationManager : public QObject
 {
@@ -50,6 +51,9 @@ private:
     int m_currentUserId = -1;
     int m_responseType = 1;
     bool m_streaming = false;
+    bool m_pendingNewConversation = false;
+    int m_pendingKnowledgeDocId = -1;
+    QStringList m_pendingMessages;
 
     void appendMessage(const QString &role, const QString &content);
     void updateLastAiMessageContent(const QString &token);

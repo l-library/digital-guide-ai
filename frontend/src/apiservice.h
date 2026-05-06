@@ -6,6 +6,7 @@
 #include <QVariantList>
 
 #include <QNetworkAccessManager>
+#include <QNetworkReply>
 #include <QWebSocket>
 
 class ApiService : public QObject
@@ -68,6 +69,7 @@ signals:
     void conversationsGroupedLoaded(QVariantList grouped);
     void conversationDeleted(bool success);
     void conversationRenamed(int conversationId, const QString &newTitle);
+    void titleAutoUpdated(int conversationId, const QString &newTitle);
     void messagesLoaded(QVariantList messages, int conversationId);
     void messageAdded(int messageId, int conversationId);
     void aiResponseReceived(int conversationId, const QString &response, const QString &role);
@@ -106,6 +108,8 @@ private:
 
     QNetworkAccessManager *m_networkManager;
     QWebSocket *m_webSocket;
+    QNetworkReply *m_streamReply = nullptr;
+    QByteArray m_sseBuffer;
     QVariantList m_stubDigitalHumans;
 
     void initStubData();

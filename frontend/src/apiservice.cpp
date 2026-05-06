@@ -295,16 +295,16 @@ void ApiService::loadMessages(int conversationId)
 // ==================== Messages (real HTTP + WebSocket fallback) ====================
 
 void ApiService::sendAiMessage(int conversationId,
-                               const QString &userMessage,
-                               int digitalHumanId,
-                               int response_type)
+                                const QString &userMessage,
+                                int digitalHumanId,
+                                int response_type)
 {
     if (m_webSocket && m_webSocket->state() == QAbstractSocket::ConnectedState) {
         sendChatViaWebSocket(conversationId, userMessage, digitalHumanId);
         return;
     }
 
-    QNetworkRequest req(QUrl(BASE_URL + "/api/v1/chat/text"));
+    QNetworkRequest req(QUrl(BASE_URL + "/api/v1/chat/stream"));
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     QJsonObject body;
@@ -313,18 +313,46 @@ void ApiService::sendAiMessage(int conversationId,
     body["response_type"] = response_type;
     body["digital_human_id"] = digitalHumanId;
 
-    QNetworkReply *reply = m_networkManager->post(req, QJsonDocument(body).toJson());
-    connect(reply, &QNetworkReply::finished, this, [this, reply, conversationId]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "sendAiMessage error:" << reply->errorString();
-            emit aiResponseReceived(conversationId, QStringLiteral("抱歉，服务暂时不可用"), "ai");
-            return;
+    m_streamReply = m_networkManager->post(req, QJsonDocument(body).toJson());
+
+    connect(m_streamReply, &QNetworkReply::readyRead, this, [this, conversationId]() {
+        m_sseBuffer += m_streamReply->readAll();
+        while (true) {
+            int idx = m_sseBuffer.indexOf("\n\n");
+            if (idx < 0)
+                break;
+            QByteArray event = m_sseBuffer.left(idx);
+            m_sseBuffer = m_sseBuffer.mid(idx + 2);
+            for (const QByteArray &line : event.split('\n')) {
+                QByteArray trimmed = line.trimmed();
+                if (!trimmed.startsWith("data: "))
+                    continue;
+                QJsonObject obj = QJsonDocument::fromJson(trimmed.mid(6)).object();
+                QString type = obj["type"].toString();
+                if (type == "token") {
+                    emit wsTokenReceived(conversationId, obj["content"].toString());
+                } else if (type == "done") {
+                    emit wsDoneReceived(conversationId, obj["message_id"].toInt(), obj["full_content"].toString());
+                } else if (type == "title_updated") {
+                    emit titleAutoUpdated(obj["conversation_id"].toInt(), obj["title"].toString());
+                } else if (type == "error") {
+                    emit wsError(obj["message"].toString());
+                }
+            }
         }
-        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
-        QJsonObject data = resp["data"].toObject();
-        QString content = data["content"].toString();
-        emit aiResponseReceived(conversationId, content, "ai");
+    });
+
+    connect(m_streamReply, &QNetworkReply::finished, this, [this]() {
+        m_sseBuffer.clear();
+        m_streamReply->deleteLater();
+        m_streamReply = nullptr;
+    });
+
+    connect(m_streamReply, &QNetworkReply::errorOccurred, this, [this, conversationId](QNetworkReply::NetworkError) {
+        m_sseBuffer.clear();
+        emit wsError(QStringLiteral("网络错误: 服务暂时不可用"));
+        m_streamReply->deleteLater();
+        m_streamReply = nullptr;
     });
 }
 
@@ -360,6 +388,10 @@ void ApiService::connectWebSocket()
             emit wsError(msg["message"].toString());
         } else if (type == "pong") {
             // 心跳回复，忽略
+        } else if (type == "title_updated") {
+            int convId = msg["conversation_id"].toInt();
+            QString title = msg["title"].toString();
+            emit titleAutoUpdated(convId, title);
         }
     });
     QObject::connect(m_webSocket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {

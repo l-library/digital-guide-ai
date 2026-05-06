@@ -23,8 +23,14 @@ ConversationManager::ConversationManager(QObject *parent)
     });
     connect(&api, &ApiService::conversationCreated, this, [this](int convId) {
         m_currentConversationId = convId;
-        m_messages.clear();
+        m_pendingNewConversation = false;
         emit currentConversationChanged();
+
+        if (!m_pendingMessages.isEmpty()) {
+            QString msgText = m_pendingMessages.takeFirst();
+            ApiService::instance().sendAiMessage(m_currentConversationId, msgText, 1, m_responseType);
+        }
+
         emit messagesChanged();
         if (m_currentUserId > 0) {
             loadConversationList(m_currentUserId);
@@ -46,6 +52,10 @@ ConversationManager::ConversationManager(QObject *parent)
         m_streaming = false;
         emit streamingAiResponseChanged();
         emit messagesChanged();
+        // 刷新对话列表，确保新对话（已有消息）出现在历史列表中
+        if (m_currentUserId > 0) {
+            loadConversationList(m_currentUserId);
+        }
     });
     connect(&api, &ApiService::wsError, this, [this](const QString &msg) {
         m_streaming = false;
@@ -54,6 +64,15 @@ ConversationManager::ConversationManager(QObject *parent)
     });
     connect(&api, &ApiService::conversationRenamed, this, [this](int conversationId, const QString &newTitle) {
         if (conversationId == m_currentConversationId) {
+            m_currentTitle = newTitle;
+            emit currentConversationChanged();
+        }
+        if (m_currentUserId > 0) {
+            loadConversationList(m_currentUserId);
+        }
+    });
+    connect(&api, &ApiService::titleAutoUpdated, this, [this](int conversationId, const QString &newTitle) {
+        if (conversationId == m_currentConversationId && !newTitle.isEmpty()) {
             m_currentTitle = newTitle;
             emit currentConversationChanged();
         }
@@ -85,7 +104,7 @@ QString ConversationManager::currentTitle() const
 
 bool ConversationManager::hasConversation() const
 {
-    return m_currentConversationId > 0;
+    return m_currentConversationId > 0 || m_pendingNewConversation;
 }
 
 bool ConversationManager::streamingAiResponse() const
@@ -95,7 +114,18 @@ bool ConversationManager::streamingAiResponse() const
 
 void ConversationManager::sendMessage(const QString &text)
 {
-    if (m_currentConversationId <= 0 || text.trimmed().isEmpty())
+    if (text.trimmed().isEmpty())
+        return;
+
+    if (m_pendingNewConversation) {
+        m_pendingMessages.append(text.trimmed());
+        appendMessage("user", text.trimmed());
+        emit messageSending();
+        ApiService::instance().createConversation(m_currentUserId, m_currentTitle, m_pendingKnowledgeDocId);
+        return;
+    }
+
+    if (m_currentConversationId <= 0)
         return;
 
     emit messageSending();
@@ -107,6 +137,8 @@ void ConversationManager::sendMessage(const QString &text)
 
 void ConversationManager::loadConversation(int conversationId)
 {
+    m_pendingNewConversation = false;
+    m_pendingMessages.clear();
     m_currentConversationId = conversationId;
     m_messages.clear();
     emit messagesChanged();
@@ -118,9 +150,12 @@ int ConversationManager::startNewConversation(int userId, const QString &title, 
 {
     m_currentUserId = userId;
     m_currentTitle = title;
+    m_currentConversationId = -1;
+    m_pendingNewConversation = true;
+    m_pendingKnowledgeDocId = knowledgeDocId;
     m_messages.clear();
+    emit currentConversationChanged();
     emit messagesChanged();
-    ApiService::instance().createConversation(userId, title, knowledgeDocId);
 
     if (!ApiService::instance().isWebSocketConnected()) {
         ApiService::instance().connectWebSocket();
@@ -135,6 +170,8 @@ void ConversationManager::clearCurrentConversation()
     m_currentTitle.clear();
     m_messages.clear();
     m_streaming = false;
+    m_pendingNewConversation = false;
+    m_pendingMessages.clear();
     emit streamingAiResponseChanged();
     emit currentConversationChanged();
     emit messagesChanged();
