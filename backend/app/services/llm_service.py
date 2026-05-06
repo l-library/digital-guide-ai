@@ -1,5 +1,6 @@
+import asyncio
 import os
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()  # 读取.env文件，把里面的变量加载到环境变量里
@@ -7,10 +8,11 @@ load_dotenv()  # 读取.env文件，把里面的变量加载到环境变量里
 MODEL_NAME = os.getenv("LLM_MODEL_NAME")
 
 _client = None
+_async_client = None
 
 
 def _get_client():
-    """懒加载 OpenAI 客户端，避免模块导入时因缺少 .env 而报错"""
+    """懒加载同步 OpenAI 客户端，避免模块导入时因缺少 .env 而报错"""
     global _client
     if _client is None:
         _client = OpenAI(
@@ -20,6 +22,17 @@ def _get_client():
     return _client
 
 
+def _get_async_client() -> AsyncOpenAI:
+    """懒加载异步 OpenAI 客户端，用于流式生成"""
+    global _async_client
+    if _async_client is None:
+        _async_client = AsyncOpenAI(
+            api_key=os.getenv("LLM_API_KEY"),
+            base_url=os.getenv("LLM_BASE_URL"),
+        )
+    return _async_client
+
+
 def generate(prompt: str) -> str:
     """
     接收完整prompt，返回LLM的回答文本。
@@ -27,27 +40,75 @@ def generate(prompt: str) -> str:
     """
     response = _get_client().chat.completions.create(
         model=MODEL_NAME,
-        messages=[
-            {"role": "user", "content": prompt}
-        ],
+        messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
         max_tokens=1000,
     )
     return response.choices[0].message.content
 
 
-def generate_stream(messages: list[dict]) -> any:
+async def generate_stream_async(messages: list[dict]):
     """
-    流式生成：接收 messages 列表（含历史对话），逐 token 产出。
-    用于 WebSocket 推送打字机效果。
+    异步流式生成：接收 messages 列表（含历史对话），逐 token 产出。
+    用于 WebSocket 和 SSE 流式推送。
     """
-    stream = _get_client().chat.completions.create(
+    client = _get_async_client()
+    stream = await client.chat.completions.create(
         model=MODEL_NAME,
         messages=messages,
         temperature=0.7,
         max_tokens=1000,
         stream=True,
     )
-    for chunk in stream:
+    async for chunk in stream:
         if chunk.choices and chunk.choices[0].delta.content:
             yield chunk.choices[0].delta.content
+
+
+async def generate_title_async(user_content: str, assistant_content: str) -> str:
+    """
+    根据第一轮对话内容自动生成简洁标题。
+    截取内容前200字避免过长输入，标题限制20字，空时回退到"新对话"。
+    使用同步客户端 + run_in_executor，避免 AsyncOpenAI 非流式响应中 content 为空的问题。
+    """
+    client = _get_client()  # 同步客户端（generate() 已验证可用）
+
+    def _call():
+        return client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "你是一个对话标题生成器。根据用户的消息和AI的回复，生成一个简洁的对话标题。"
+                        "要求：不超过10个字，只输出标题本身，不要加引号或其他格式。"
+                        "考虑到AI的身份是一名数字人导游，请不要被其回复中一定会有的导游口吻误导，用户的输入应当被更加重视。"
+                        "例如，如果用户让AI做自我介绍，而AI回复自己是某某景点的导游，此时你的输出不应当是\'某某景点AI导游\'之类的，而应该是\'AI导游的自我介绍\'这个更重视用户问题的标题。"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"用户消息：{user_content[:200]}\nAI回复：{assistant_content[:200]}\n\n请生成对话标题：",
+                },
+            ],
+            temperature=0.3,
+            max_tokens=50,
+            extra_body={"thinking": {"type": "disabled"}}
+        )
+
+    response = await asyncio.to_thread(_call)
+    content = response.choices[0].message.content
+
+    # 兼容 DeepSeek 推理模型：reasoning_content 可能有值而 content 为空
+    if not content:
+        print("content为空，输出reasoning_content")
+        msg = response.choices[0].message
+        content = getattr(msg, "reasoning_content", None)
+
+    print(f"[generate_title_async] content={content!r}")
+    if not content:
+        return "新对话"
+    title = content.strip().strip('"').strip("'")
+    if len(title) > 20:
+        title = title[:20]
+    return title if title else "新对话"

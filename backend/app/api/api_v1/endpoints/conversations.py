@@ -67,6 +67,8 @@ def list_conversations(
     items = []
     for c in convs:
         msg_count = db.query(func.count(Message.id)).filter(Message.conversation_id == c.id).scalar()
+        if msg_count == 0:
+            continue
         last_msg = (
             db.query(Message)
             .filter(Message.conversation_id == c.id)
@@ -110,6 +112,8 @@ def list_conversations_grouped(
 
     for c in convs:
         msg_count = db.query(func.count(Message.id)).filter(Message.conversation_id == c.id).scalar()
+        if msg_count == 0:
+            continue
         item = {
             "conversation_id": c.id,
             "title": c.title,
