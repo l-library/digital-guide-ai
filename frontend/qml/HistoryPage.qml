@@ -95,8 +95,6 @@ Page {
                     height: 60
 
                     contentItem: RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 16
                         spacing: 12
 
                         Text {

@@ -1,8 +1,8 @@
 # 景区导览AI数字人 — 前后端通信接口规范
 
-> 协议：HTTP + WebSocket  
-> 基础路径：`/api/v1`  
-> 数据格式：JSON（除文件上传外）  
+> 协议：HTTP + WebSocket
+> 基础路径：`/api/v1`
+> 数据格式：JSON（除文件上传外）
 > 认证方式：JWT Bearer Token（除登录/注册外，所有请求均需在 Header 中携带 `Authorization: Bearer <token>`）
 
 ---

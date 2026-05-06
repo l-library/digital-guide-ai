@@ -4,12 +4,14 @@
 #include <QDateTime>
 #include <QTimer>
 #include <QDebug>
-
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QNetworkAccessManager>
+#include <QJsonArray>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QUrlQuery>
+
+static const QString BASE_URL = QStringLiteral("http://0.0.0.0:8000");
 
 ApiService &ApiService::instance()
 {
@@ -19,6 +21,8 @@ ApiService &ApiService::instance()
 
 ApiService::ApiService(QObject *parent)
     : QObject(parent)
+    , m_networkManager(new QNetworkAccessManager(this))
+    , m_webSocket(nullptr)
 {
     initStubData();
 }
@@ -47,7 +51,22 @@ void ApiService::initStubData()
     m_stubDigitalHumans = {dh1, dh2, dh3};
 }
 
-// --- Auth ---
+QVariantList ApiService::mapMessagesToFrontendFormat(const QVariantList &items) const
+{
+    QVariantList result;
+    for (const QVariant &item : items) {
+        QVariantMap src = item.toMap();
+        QVariantMap dst;
+        dst["id"] = src.value("id");
+        dst["role"] = src.value("role");
+        dst["content"] = src.value("content");
+        dst["timestamp"] = src.value("created_at");
+        result.append(dst);
+    }
+    return result;
+}
+
+// ==================== Auth (stubs kept for now) ====================
 
 void ApiService::login(const QString &username, const QString &password)
 {
@@ -99,130 +118,345 @@ void ApiService::validateToken(const QString &token, int userId)
     });
 }
 
-void ApiService::logout(int /*userId*/)
+void ApiService::logout(int)
 {
     QTimer::singleShot(0, this, [this]() {
         emit logoutResult(true);
     });
 }
 
-// --- Conversations ---
+// ==================== Conversations (real HTTP) ====================
 
 void ApiService::createConversation(int userId, const QString &title, int knowledgeDocId)
 {
-    Q_UNUSED(userId);
-    Q_UNUSED(knowledgeDocId);
-    static int nextConvId = 100;
+    QNetworkRequest req(QUrl(BASE_URL + "/api/v1/conversations"));
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
-    QTimer::singleShot(0, this, [this, title]() {
-        int convId = nextConvId++;
+    QJsonObject body;
+    body["user_id"] = userId;
+    body["title"] = title;
+    body["knowledge_doc_id"] = knowledgeDocId;
+
+    QNetworkReply *reply = m_networkManager->post(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "createConversation error:" << reply->errorString();
+            emit apiError("创建对话失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        int convId = resp["data"].toObject()["conversation_id"].toInt();
         emit conversationCreated(convId);
     });
 }
 
-void ApiService::loadConversations(int /*userId*/)
+void ApiService::loadConversations(int userId)
 {
-    QTimer::singleShot(0, this, [this]() {
-        emit conversationsLoaded(QVariantList());
+    QUrl url(BASE_URL + "/api/v1/conversations");
+    QUrlQuery query;
+    query.addQueryItem("user_id", QString::number(userId));
+    url.setQuery(query);
+
+    QNetworkReply *reply = m_networkManager->get(QNetworkRequest(url));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "loadConversations error:" << reply->errorString();
+            emit apiError("加载对话列表失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        QJsonArray items = resp["data"].toObject()["items"].toArray();
+
+        QVariantList convs;
+        for (const QJsonValue &val : items) {
+            QJsonObject obj = val.toObject();
+            QVariantMap cm;
+            cm["id"] = obj["conversation_id"].toInt();
+            cm["title"] = obj["title"].toString();
+            cm["message_count"] = obj["message_count"].toInt();
+            cm["last_message"] = obj["last_message"].toString();
+            cm["updatedAt"] = obj["last_time"].toString();
+            cm["created_at"] = obj["created_at"].toString();
+            convs.append(cm);
+        }
+        emit conversationsLoaded(convs);
     });
 }
 
-void ApiService::loadConversationsGroupedByDate(int /*userId*/)
+void ApiService::loadConversationsGroupedByDate(int userId)
 {
-    QTimer::singleShot(0, this, [this]() {
-        emit conversationsGroupedLoaded(QVariantList());
-    });
-}
+    QUrl url(BASE_URL + "/api/v1/conversations/grouped");
+    QUrlQuery query;
+    query.addQueryItem("user_id", QString::number(userId));
+    url.setQuery(query);
 
-void ApiService::deleteConversation(int /*conversationId*/)
-{
-    QTimer::singleShot(0, this, [this]() {
-        emit conversationDeleted(true);
-    });
-}
+    QNetworkReply *reply = m_networkManager->get(QNetworkRequest(url));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "loadConversationsGroupedByDate error:" << reply->errorString();
+            emit apiError("加载分组对话失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        QJsonArray groups = resp["data"].toObject()["groups"].toArray();
 
-void ApiService::loadMessages(int /*conversationId*/)
-{
-    QTimer::singleShot(0, this, [this]() {
-        emit messagesLoaded(QVariantList(), 0);
-    });
-}
+        QVariantList grouped;
+        for (const QJsonValue &gv : groups) {
+            QJsonObject gObj = gv.toObject();
+            QVariantMap group;
+            group["date"] = gObj["date"].toString();
 
-// --- Messages ---
-
-void ApiService::addMessage(int conversationId, const QString &role, const QString &content)
-{
-    static int nextMsgId = 1000;
-
-    QTimer::singleShot(0, this, [this, conversationId, role, content]() {
-        int msgId = nextMsgId++;
-        emit messageAdded(msgId, conversationId);
-    });
-}
-
-void ApiService::sendAiMessage(int conversationId, const QString &userMessage, int digitalHumanId)
-{
-    QTimer::singleShot(0, this, [this, conversationId, digitalHumanId, userMessage]() {
-        QString dhName = "231";
-
-        QNetworkAccessManager *manager = new QNetworkAccessManager(this);
-        QNetworkRequest request;
-        request.setUrl(QUrl("http://121.43.27.51:8000/chat"));
-        request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-
-        QJsonObject requestData;
-        requestData["content"] = userMessage;
-        QByteArray data = QJsonDocument(requestData).toJson();
-
-        QNetworkReply *reply = manager->post(request, data);
-
-        // 关键修正：捕获需要的值，而不是引用
-        connect(reply, &QNetworkReply::finished, this, [this, conversationId, reply, manager]() {
-            if (reply->error() == QNetworkReply::NoError) {
-                QByteArray responseData = reply->readAll();
-                QJsonDocument jsonResponse = QJsonDocument::fromJson(responseData);
-                QString content = jsonResponse.object()["content"].toString();
-
-                // 在这里发送信号
-                emit aiResponseReceived(conversationId, content, "ai");
-            } else {
-                qDebug() << "HTTP error:" << reply->errorString();
-                emit aiResponseReceived(conversationId, "抱歉，服务暂时不可用", "ai");
+            QJsonArray convs = gObj["conversations"].toArray();
+            QVariantList convList;
+            for (const QJsonValue &cv : convs) {
+                QJsonObject cObj = cv.toObject();
+                QVariantMap cm;
+                cm["id"] = cObj["conversation_id"].toInt();
+                cm["title"] = cObj["title"].toString();
+                cm["message_count"] = cObj["message_count"].toInt();
+                cm["updatedAt"] = cObj["updated_at"].toString();
+                cm["created_at"] = cObj["created_at"].toString();
+                convList.append(cm);
             }
-            reply->deleteLater();
-            manager->deleteLater(); // 清理manager
-        });
-        // 不需要立即emit
+            group["conversations"] = convList;
+            grouped.append(group);
+        }
+        emit conversationsGroupedLoaded(grouped);
     });
 }
 
-// --- Knowledge docs ---
+void ApiService::deleteConversation(int conversationId)
+{
+    QUrl url(BASE_URL + "/api/v1/conversations/" + QString::number(conversationId));
+    QNetworkReply *reply = m_networkManager->deleteResource(QNetworkRequest(url));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        bool success = (reply->error() == QNetworkReply::NoError);
+        if (!success) {
+            qDebug() << "deleteConversation error:" << reply->errorString();
+        }
+        emit conversationDeleted(success);
+    });
+}
 
-void ApiService::uploadKnowledgeDoc(int /*userId*/, const QString &title, const QString &filePath, const QString &content)
+void ApiService::renameConversation(int conversationId, const QString &newTitle)
+{
+    QUrl url(BASE_URL + "/api/v1/conversations/" + QString::number(conversationId));
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject body;
+    body["title"] = newTitle;
+
+    QNetworkReply *reply = m_networkManager->put(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply, conversationId, newTitle]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "renameConversation error:" << reply->errorString();
+            emit apiError("重命名对话失败");
+            return;
+        }
+        emit conversationRenamed(conversationId, newTitle);
+    });
+}
+
+void ApiService::loadMessages(int conversationId)
+{
+    QUrl url(BASE_URL + "/api/v1/conversations/" + QString::number(conversationId) + "/messages/all");
+
+    QNetworkReply *reply = m_networkManager->get(QNetworkRequest(url));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, conversationId]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "loadMessages error:" << reply->errorString();
+            emit messagesLoaded(QVariantList(), conversationId);
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        QJsonArray items = resp["data"].toObject()["items"].toArray();
+
+        QVariantList messages;
+        for (const QJsonValue &val : items) {
+            QJsonObject obj = val.toObject();
+            QVariantMap mm;
+            mm["id"] = obj["id"].toInt();
+            mm["role"] = obj["role"].toString();
+            mm["content"] = obj["content"].toString();
+            mm["timestamp"] = obj["created_at"].toString();
+            messages.append(mm);
+        }
+        emit messagesLoaded(messages, conversationId);
+    });
+}
+
+// ==================== Messages (real HTTP + WebSocket fallback) ====================
+
+void ApiService::sendAiMessage(int conversationId,
+                                const QString &userMessage,
+                                int digitalHumanId,
+                                int response_type)
+{
+    if (m_webSocket && m_webSocket->state() == QAbstractSocket::ConnectedState) {
+        sendChatViaWebSocket(conversationId, userMessage, digitalHumanId);
+        return;
+    }
+
+    QNetworkRequest req(QUrl(BASE_URL + "/api/v1/chat/stream"));
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject body;
+    body["conversation_id"] = conversationId;
+    body["content"] = userMessage;
+    body["response_type"] = response_type;
+    body["digital_human_id"] = digitalHumanId;
+
+    m_streamReply = m_networkManager->post(req, QJsonDocument(body).toJson());
+
+    connect(m_streamReply, &QNetworkReply::readyRead, this, [this, conversationId]() {
+        m_sseBuffer += m_streamReply->readAll();
+        while (true) {
+            int idx = m_sseBuffer.indexOf("\n\n");
+            if (idx < 0)
+                break;
+            QByteArray event = m_sseBuffer.left(idx);
+            m_sseBuffer = m_sseBuffer.mid(idx + 2);
+            for (const QByteArray &line : event.split('\n')) {
+                QByteArray trimmed = line.trimmed();
+                if (!trimmed.startsWith("data: "))
+                    continue;
+                QJsonObject obj = QJsonDocument::fromJson(trimmed.mid(6)).object();
+                QString type = obj["type"].toString();
+                if (type == "token") {
+                    emit wsTokenReceived(conversationId, obj["content"].toString());
+                } else if (type == "done") {
+                    emit wsDoneReceived(conversationId, obj["message_id"].toInt(), obj["full_content"].toString());
+                } else if (type == "title_updated") {
+                    emit titleAutoUpdated(obj["conversation_id"].toInt(), obj["title"].toString());
+                } else if (type == "error") {
+                    emit wsError(obj["message"].toString());
+                }
+            }
+        }
+    });
+
+    connect(m_streamReply, &QNetworkReply::finished, this, [this]() {
+        m_sseBuffer.clear();
+        m_streamReply->deleteLater();
+        m_streamReply = nullptr;
+    });
+
+    connect(m_streamReply, &QNetworkReply::errorOccurred, this, [this, conversationId](QNetworkReply::NetworkError) {
+        m_sseBuffer.clear();
+        emit wsError(QStringLiteral("网络错误: 服务暂时不可用"));
+        m_streamReply->deleteLater();
+        m_streamReply = nullptr;
+    });
+}
+
+// ==================== WebSocket streaming ====================
+
+void ApiService::connectWebSocket()
+{
+    if (m_webSocket) {
+        m_webSocket->deleteLater();
+    }
+    m_webSocket = new QWebSocket(QString(), QWebSocketProtocol::VersionLatest, this);
+
+    QObject::connect(m_webSocket, &QWebSocket::connected, this, [this]() {
+        emit wsConnected();
+    });
+    QObject::connect(m_webSocket, &QWebSocket::disconnected, this, [this]() {
+        emit wsDisconnected();
+    });
+    QObject::connect(m_webSocket, &QWebSocket::textMessageReceived, this, [this](const QString &message) {
+        QJsonObject msg = QJsonDocument::fromJson(message.toUtf8()).object();
+        QString type = msg["type"].toString();
+
+        if (type == "token") {
+            int convId = msg["conversation_id"].toInt();
+            QString token = msg["content"].toString();
+            emit wsTokenReceived(convId, token);
+        } else if (type == "done") {
+            int convId = msg["conversation_id"].toInt();
+            int msgId = msg["message_id"].toInt();
+            QString fullContent = msg["full_content"].toString();
+            emit wsDoneReceived(convId, msgId, fullContent);
+        } else if (type == "error") {
+            emit wsError(msg["message"].toString());
+        } else if (type == "pong") {
+            // 心跳回复，忽略
+        } else if (type == "title_updated") {
+            int convId = msg["conversation_id"].toInt();
+            QString title = msg["title"].toString();
+            emit titleAutoUpdated(convId, title);
+        }
+    });
+    QObject::connect(m_webSocket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
+        emit wsError(m_webSocket->errorString());
+    });
+
+    QUrl wsUrl(BASE_URL);
+    wsUrl.setScheme("ws");
+    wsUrl.setPath("/ws/chat");
+    m_webSocket->open(wsUrl);
+}
+
+void ApiService::disconnectWebSocket()
+{
+    if (m_webSocket) {
+        m_webSocket->close();
+        m_webSocket->deleteLater();
+        m_webSocket = nullptr;
+    }
+}
+
+bool ApiService::isWebSocketConnected() const
+{
+    return m_webSocket && m_webSocket->state() == QAbstractSocket::ConnectedState;
+}
+
+void ApiService::sendChatViaWebSocket(int conversationId, const QString &content, int digitalHumanId)
+{
+    if (!m_webSocket || m_webSocket->state() != QAbstractSocket::ConnectedState) {
+        emit wsError(QStringLiteral("WebSocket 未连接"));
+        return;
+    }
+    QJsonObject msg;
+    msg["type"] = "chat_message";
+    msg["conversation_id"] = conversationId;
+    msg["content"] = content;
+    msg["digital_human_id"] = digitalHumanId;
+    m_webSocket->sendTextMessage(QString(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
+}
+
+// ==================== Knowledge docs (stubs) ====================
+
+void ApiService::uploadKnowledgeDoc(int, const QString &title, const QString &, const QString &)
 {
     static int nextDocId = 200;
-
-    QTimer::singleShot(0, this, [this, title]() {
-        int docId = nextDocId++;
-        emit knowledgeDocUploaded(docId);
+    QTimer::singleShot(0, this, [this, nextDocId]() {
+        emit knowledgeDocUploaded(nextDocId);
     });
 }
 
-void ApiService::deleteKnowledgeDoc(int /*docId*/)
+void ApiService::deleteKnowledgeDoc(int)
 {
     QTimer::singleShot(0, this, [this]() {
         emit knowledgeDocDeleted(true);
     });
 }
 
-void ApiService::loadKnowledgeDocs(int /*userId*/)
+void ApiService::loadKnowledgeDocs(int)
 {
     QTimer::singleShot(0, this, [this]() {
         emit knowledgeDocsLoaded(QVariantList());
     });
 }
 
-// --- Digital humans ---
+// ==================== Digital humans (stubs) ====================
 
 void ApiService::loadDigitalHumans()
 {
@@ -238,13 +472,12 @@ void ApiService::setDefaultDigitalHuman(int dhId)
         dhm["isDefault"] = (dhm["id"].toInt() == dhId);
         dh = dhm;
     }
-
     QTimer::singleShot(0, this, [this]() {
         emit defaultDigitalHumanSet(true);
     });
 }
 
-// --- Settings ---
+// ==================== Settings (stubs) ====================
 
 void ApiService::getSetting(const QString &key)
 {
@@ -253,14 +486,14 @@ void ApiService::getSetting(const QString &key)
     });
 }
 
-void ApiService::setSetting(const QString &key, const QString &value)
+void ApiService::setSetting(const QString &, const QString &)
 {
-    QTimer::singleShot(0, this, [this, key]() {
+    QTimer::singleShot(0, this, [this]() {
         emit settingSaved(true);
     });
 }
 
-// --- Export ---
+// ==================== Export (stub) ====================
 
 void ApiService::exportConversation(int conversationId)
 {
