@@ -18,4 +18,9 @@ __pycache__/
 
 *.db
 
-AGENTS.md
+AGENTS.md 
+
+# 忽略我测试时的临时音频文件
+backend/data/temp_audios/
+backend/data/*.m4a
+backend/data/*.wav
