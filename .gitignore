@@ -24,3 +24,4 @@ AGENTS.md
 backend/data/temp_audios/
 backend/data/*.m4a
 backend/data/*.wav
+*.sh

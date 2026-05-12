@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network WebSockets QuickEffects)
+find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network WebSockets QuickEffects Multimedia)
 
 qt_standard_project_setup(REQUIRES 6.10)
 
@@ -21,6 +21,7 @@ qt_add_executable(appdigital_guide_ai
     src/settingsmanager.cpp
     src/voiceinterface.cpp
     src/digitalhumanmanager.cpp
+    src/audioplayer.cpp
     res.qrc
 )
 
@@ -35,7 +36,7 @@ qt_add_qml_module(appdigital_guide_ai
         qml/SettingsPage.qml
         qml/components/MessageBubble.qml
 
-        SOURCES src/apiservice.cpp src/apiservice.h src/conversationmanager.cpp src/conversationmanager.h src/digitalhumanmanager.cpp src/digitalhumanmanager.h src/historymanager.cpp src/historymanager.h src/loginmanager.cpp src/loginmanager.h src/settingsmanager.cpp src/settingsmanager.h src/voiceinterface.cpp src/voiceinterface.h
+        SOURCES src/apiservice.cpp src/apiservice.h src/conversationmanager.cpp src/conversationmanager.h src/digitalhumanmanager.cpp src/digitalhumanmanager.h src/historymanager.cpp src/historymanager.h src/loginmanager.cpp src/loginmanager.h src/settingsmanager.cpp src/settingsmanager.h src/voiceinterface.cpp src/voiceinterface.h src/audioplayer.cpp src/audioplayer.h
         QML_FILES
 )
 
@@ -48,7 +49,7 @@ set_target_properties(appdigital_guide_ai PROPERTIES
 )
 
 target_link_libraries(appdigital_guide_ai
-    PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::WebSockets Qt6::QuickEffects
+    PRIVATE Qt6::Quick Qt6::QuickControls2 Qt6::Network Qt6::WebSockets Qt6::QuickEffects Qt6::Multimedia
 )
 
 install(TARGETS appdigital_guide_ai

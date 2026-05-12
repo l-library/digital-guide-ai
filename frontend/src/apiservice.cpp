@@ -2,6 +2,8 @@
 
 #include <QCryptographicHash>
 #include <QDateTime>
+#include <QFile>
+#include <QHttpMultiPart>
 #include <QTimer>
 #include <QDebug>
 #include <QJsonDocument>
@@ -11,7 +13,7 @@
 #include <QNetworkRequest>
 #include <QUrlQuery>
 
-static const QString BASE_URL = QStringLiteral("http://0.0.0.0:8000");
+static const QString BASE_URL = QStringLiteral("http://localhost:8000");
 
 ApiService &ApiService::instance()
 {
@@ -300,7 +302,7 @@ void ApiService::sendAiMessage(int conversationId,
                                 int response_type)
 {
     if (m_webSocket && m_webSocket->state() == QAbstractSocket::ConnectedState) {
-        sendChatViaWebSocket(conversationId, userMessage, digitalHumanId);
+        sendChatViaWebSocket(conversationId, userMessage, digitalHumanId, response_type);
         return;
     }
 
@@ -332,7 +334,7 @@ void ApiService::sendAiMessage(int conversationId,
                 if (type == "token") {
                     emit wsTokenReceived(conversationId, obj["content"].toString());
                 } else if (type == "done") {
-                    emit wsDoneReceived(conversationId, obj["message_id"].toInt(), obj["full_content"].toString());
+                    emit wsDoneReceived(conversationId, obj["message_id"].toInt(), obj["full_content"].toString(), obj["audio_url"].toString());
                 } else if (type == "title_updated") {
                     emit titleAutoUpdated(obj["conversation_id"].toInt(), obj["title"].toString());
                 } else if (type == "error") {
@@ -383,7 +385,8 @@ void ApiService::connectWebSocket()
             int convId = msg["conversation_id"].toInt();
             int msgId = msg["message_id"].toInt();
             QString fullContent = msg["full_content"].toString();
-            emit wsDoneReceived(convId, msgId, fullContent);
+            QString audioUrl = msg["audio_url"].toString();
+            emit wsDoneReceived(convId, msgId, fullContent, audioUrl);
         } else if (type == "error") {
             emit wsError(msg["message"].toString());
         } else if (type == "pong") {
@@ -418,7 +421,7 @@ bool ApiService::isWebSocketConnected() const
     return m_webSocket && m_webSocket->state() == QAbstractSocket::ConnectedState;
 }
 
-void ApiService::sendChatViaWebSocket(int conversationId, const QString &content, int digitalHumanId)
+void ApiService::sendChatViaWebSocket(int conversationId, const QString &content, int digitalHumanId, int responseType)
 {
     if (!m_webSocket || m_webSocket->state() != QAbstractSocket::ConnectedState) {
         emit wsError(QStringLiteral("WebSocket 未连接"));
@@ -429,7 +432,95 @@ void ApiService::sendChatViaWebSocket(int conversationId, const QString &content
     msg["conversation_id"] = conversationId;
     msg["content"] = content;
     msg["digital_human_id"] = digitalHumanId;
+    msg["response_type"] = responseType;
     m_webSocket->sendTextMessage(QString(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
+}
+
+// ==================== Voice streaming SSE ====================
+
+void ApiService::sendVoiceMessage(int conversationId, const QString &audioFilePath, int digitalHumanId, int responseType)
+{
+    QFile *file = new QFile(audioFilePath);
+    if (!file->open(QIODevice::ReadOnly)) {
+        delete file;
+        emit voiceError(QStringLiteral("无法打开录音文件"));
+        return;
+    }
+
+    QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+
+    QHttpPart audioPart;
+    audioPart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                        QVariant(QStringLiteral("form-data; name=\"audio\"; filename=\"recording.wav\"")));
+    audioPart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(QStringLiteral("audio/wav")));
+    audioPart.setBodyDevice(file);
+    file->setParent(multiPart);
+
+    QHttpPart convIdPart;
+    convIdPart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                         QVariant(QStringLiteral("form-data; name=\"conversation_id\"")));
+    convIdPart.setBody(QString::number(conversationId).toUtf8());
+
+QHttpPart dhIdPart;
+    dhIdPart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                        QVariant(QStringLiteral("form-data; name=\"digital_human_id\"")));
+    dhIdPart.setBody(QString::number(digitalHumanId).toUtf8());
+
+    QHttpPart rtPart;
+    rtPart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                      QVariant(QStringLiteral("form-data; name=\"response_type\"")));
+    rtPart.setBody(QString::number(responseType).toUtf8());
+
+    multiPart->append(audioPart);
+    multiPart->append(convIdPart);
+    multiPart->append(dhIdPart);
+    multiPart->append(rtPart);
+
+    QNetworkRequest req(QUrl(BASE_URL + "/api/v1/chat/voice_stream"));
+    m_voiceStreamReply = m_networkManager->post(req, multiPart);
+    multiPart->setParent(m_voiceStreamReply);
+
+    connect(m_voiceStreamReply, &QNetworkReply::readyRead, this, [this, conversationId]() {
+        m_voiceSseBuffer += m_voiceStreamReply->readAll();
+        while (true) {
+            int idx = m_voiceSseBuffer.indexOf("\n\n");
+            if (idx < 0)
+                break;
+            QByteArray event = m_voiceSseBuffer.left(idx);
+            m_voiceSseBuffer = m_voiceSseBuffer.mid(idx + 2);
+            for (const QByteArray &line : event.split('\n')) {
+                QByteArray trimmed = line.trimmed();
+                if (!trimmed.startsWith("data: "))
+                    continue;
+                QJsonObject obj = QJsonDocument::fromJson(trimmed.mid(6)).object();
+                QString type = obj["type"].toString();
+                if (type == "transcribed_text") {
+                    emit voiceTranscribedText(conversationId, obj["content"].toString());
+                } else if (type == "token") {
+                    emit voiceTokenReceived(conversationId, obj["content"].toString());
+                } else if (type == "done") {
+                    emit voiceDoneReceived(conversationId, obj["message_id"].toInt(), obj["full_content"].toString(), obj["audio_url"].toString());
+                } else if (type == "title_updated") {
+                    emit titleAutoUpdated(obj["conversation_id"].toInt(), obj["title"].toString());
+                } else if (type == "error") {
+                    emit voiceError(obj["message"].toString());
+                }
+            }
+        }
+    });
+
+    connect(m_voiceStreamReply, &QNetworkReply::finished, this, [this]() {
+        m_voiceSseBuffer.clear();
+        m_voiceStreamReply->deleteLater();
+        m_voiceStreamReply = nullptr;
+    });
+
+    connect(m_voiceStreamReply, &QNetworkReply::errorOccurred, this, [this, conversationId](QNetworkReply::NetworkError) {
+        m_voiceSseBuffer.clear();
+        emit voiceError(QStringLiteral("语音上传失败，请检查网络"));
+        m_voiceStreamReply->deleteLater();
+        m_voiceStreamReply = nullptr;
+    });
 }
 
 // ==================== Knowledge docs (stubs) ====================

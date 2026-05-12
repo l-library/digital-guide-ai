@@ -2,35 +2,54 @@ import whisper
 import torch
 import warnings
 import os
+
 warnings.filterwarnings("ignore")
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"ASR 语音模块初始化中... 使用: {device}")
+_device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"[ASR] 语音模块将使用设备: {_device}")
 
-print("正在加载 Whisper Medium 模型，这可能需要一点时间...")
-# 如果之前没下载过，运行这行代码时后台会开始下载约 1.5GB 的模型权重
-model = whisper.load_model("medium", device=device) # 我用的是medium，如果设备带不动可以换成更小的tiny或base
+# 模型路径：backend/models
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_models_dir = os.path.join(_current_dir, "..", "..", "models")
 
-# 获取 backend/models 的绝对路径
-current_dir = os.path.dirname(os.path.abspath(__file__))
-models_dir = os.path.join(current_dir, "..", "..", "models")
+_model = None
 
-# 让Whisper去指定的 models 文件夹里找
-model = whisper.load_model("medium", device=device, download_root=models_dir)
+
+def _get_model():
+    """懒加载 Whisper 模型，避免模块导入时阻塞"""
+    global _model
+    if _model is None:
+        print("[ASR] 正在加载 Whisper Medium 模型，首次加载可能需要较长时间...")
+        _model = whisper.load_model("base", device=_device, download_root=_models_dir)
+        print("[ASR] Whisper 模型加载完成")
+    return _model
+
+
 def transcribe_audio(audio_path: str) -> str:
     """
     将音频文件转为文本（含语境增强）
     """
+    import subprocess
+
     try:
-        # 给模型注入语境（让它能识别一些专有名词，这个后面可以改得更详细一些）
+        abs_path = os.path.abspath(audio_path)
+        if not os.path.exists(abs_path):
+            return f"语音识别失败: 音频文件不存在: {abs_path}"
+
+        subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
+
+        model = _get_model()
         prompt_text = "这是一段关于无锡灵山景点的旅游咨询对话。关键词包含：灵山胜境、灵山、门票、历史由来、九龙灌浴、梵宫等。"
-        
-        # 加上 language 和 initial_prompt 参数
+
         result = model.transcribe(
-            audio_path,
-            language="zh",               # 强制约束为中文
-            initial_prompt=prompt_text   # 提前告诉它接下来会听到什么领域的词
+            abs_path,
+            language="zh",
+            initial_prompt=prompt_text,
         )
         return result["text"]
+    except FileNotFoundError:
+        return "语音识别失败: 未找到 ffmpeg，请安装 ffmpeg 并将其添加到系统 PATH"
+    except subprocess.CalledProcessError:
+        return "语音识别失败: ffmpeg 不可用，请检查 ffmpeg 安装"
     except Exception as e:
         return f"语音识别失败: {str(e)}"

@@ -2,6 +2,7 @@
 #include "apiservice.h"
 
 #include <QDateTime>
+#include <QDebug>
 
 ConversationManager::ConversationManager(QObject *parent)
     : QObject(parent)
@@ -28,7 +29,12 @@ ConversationManager::ConversationManager(QObject *parent)
 
         if (!m_pendingMessages.isEmpty()) {
             QString msgText = m_pendingMessages.takeFirst();
-            ApiService::instance().sendAiMessage(m_currentConversationId, msgText, 1, m_responseType);
+            ApiService::instance().sendAiMessage(m_currentConversationId, msgText, m_digitalHumanId, m_responseType);
+        } else if (!m_pendingVoiceFilePath.isEmpty()) {
+            QString filePath = m_pendingVoiceFilePath;
+            m_pendingVoiceFilePath.clear();
+            qDebug() << "ConversationManager: 对话创建完成，发送暂存语音:" << filePath;
+            ApiService::instance().sendVoiceMessage(m_currentConversationId, filePath, m_digitalHumanId, m_responseType);
         }
 
         emit messagesChanged();
@@ -46,18 +52,50 @@ ConversationManager::ConversationManager(QObject *parent)
             return;
         updateLastAiMessageContent(token);
     });
-    connect(&api, &ApiService::wsDoneReceived, this, [this](int conversationId, int, const QString &) {
+    connect(&api, &ApiService::wsDoneReceived, this, [this](int conversationId, int, const QString &, const QString &audioUrl) {
         if (conversationId != m_currentConversationId)
             return;
         m_streaming = false;
         emit streamingAiResponseChanged();
+        if (!audioUrl.isEmpty()) {
+            setCurrentAudioUrl(audioUrl);
+        }
+        setTtsPending(false);
         emit messagesChanged();
-        // 刷新对话列表，确保新对话（已有消息）出现在历史列表中
         if (m_currentUserId > 0) {
             loadConversationList(m_currentUserId);
         }
     });
     connect(&api, &ApiService::wsError, this, [this](const QString &msg) {
+        m_streaming = false;
+        emit streamingAiResponseChanged();
+        emit errorOccurred(msg);
+    });
+    connect(&api, &ApiService::voiceTranscribedText, this, [this](int conversationId, const QString &text) {
+        if (conversationId != m_currentConversationId)
+            return;
+        appendMessage("user", text);
+    });
+    connect(&api, &ApiService::voiceTokenReceived, this, [this](int conversationId, const QString &token) {
+        if (conversationId != m_currentConversationId)
+            return;
+        updateLastAiMessageContent(token);
+    });
+connect(&api, &ApiService::voiceDoneReceived, this, [this](int conversationId, int, const QString &, const QString &audioUrl) {
+        if (conversationId != m_currentConversationId)
+            return;
+        m_streaming = false;
+        emit streamingAiResponseChanged();
+        if (!audioUrl.isEmpty()) {
+            setCurrentAudioUrl(audioUrl);
+        }
+        setTtsPending(false);
+        emit messagesChanged();
+        if (m_currentUserId > 0) {
+            loadConversationList(m_currentUserId);
+        }
+    });
+    connect(&api, &ApiService::voiceError, this, [this](const QString &msg) {
         m_streaming = false;
         emit streamingAiResponseChanged();
         emit errorOccurred(msg);
@@ -132,7 +170,27 @@ void ConversationManager::sendMessage(const QString &text)
 
     appendMessage("user", text.trimmed());
 
-    ApiService::instance().sendAiMessage(m_currentConversationId, text.trimmed(), 1, m_responseType);
+    ApiService::instance().sendAiMessage(m_currentConversationId, text.trimmed(), m_digitalHumanId, m_responseType);
+}
+
+void ConversationManager::sendVoiceMessage(const QString &audioFilePath)
+{
+    if (m_pendingNewConversation) {
+        m_pendingVoiceFilePath = audioFilePath;
+        emit messageSending();
+        ApiService::instance().createConversation(m_currentUserId, m_currentTitle, m_pendingKnowledgeDocId);
+        return;
+    }
+
+    if (m_currentConversationId <= 0) {
+        qDebug() << "ConversationManager::sendVoiceMessage: 无有效对话，丢弃语音";
+        return;
+    }
+
+    emit messageSending();
+
+    qDebug() << "ConversationManager::sendVoiceMessage: 发送语音到对话" << m_currentConversationId;
+    ApiService::instance().sendVoiceMessage(m_currentConversationId, audioFilePath, m_digitalHumanId, m_responseType);
 }
 
 void ConversationManager::loadConversation(int conversationId)
@@ -141,7 +199,13 @@ void ConversationManager::loadConversation(int conversationId)
     m_pendingMessages.clear();
     m_currentConversationId = conversationId;
     m_messages.clear();
+    m_currentAudioUrl.clear();
+    m_ttsPending = false;
+    m_streaming = false;
     emit messagesChanged();
+    emit streamingAiResponseChanged();
+    emit currentAudioUrlChanged();
+    emit ttsPendingChanged();
     ApiService::instance().loadMessages(conversationId);
     emit currentConversationChanged();
 }
@@ -153,6 +217,7 @@ int ConversationManager::startNewConversation(int userId, const QString &title, 
     m_currentConversationId = -1;
     m_pendingNewConversation = true;
     m_pendingKnowledgeDocId = knowledgeDocId;
+    m_pendingVoiceFilePath.clear();
     m_messages.clear();
     emit currentConversationChanged();
     emit messagesChanged();
@@ -172,9 +237,14 @@ void ConversationManager::clearCurrentConversation()
     m_streaming = false;
     m_pendingNewConversation = false;
     m_pendingMessages.clear();
+    m_pendingVoiceFilePath.clear();
+    m_currentAudioUrl.clear();
+    m_ttsPending = false;
     emit streamingAiResponseChanged();
     emit currentConversationChanged();
     emit messagesChanged();
+    emit currentAudioUrlChanged();
+    emit ttsPendingChanged();
 }
 
 void ConversationManager::loadConversationList(int userId)
@@ -206,6 +276,12 @@ void ConversationManager::disconnectWebSocket()
 
 void ConversationManager::appendMessage(const QString &role, const QString &content)
 {
+    if (role == "user") {
+        m_currentAudioUrl.clear();
+        m_ttsPending = false;
+        emit currentAudioUrlChanged();
+        emit ttsPendingChanged();
+    }
     QVariantMap msg;
     msg["id"] = 0;
     msg["role"] = role;
@@ -220,6 +296,7 @@ void ConversationManager::updateLastAiMessageContent(const QString &token)
     if (!m_streaming) {
         m_streaming = true;
         emit streamingAiResponseChanged();
+        setTtsPending(true);
         QVariantMap placeholder;
         placeholder["id"] = 0;
         placeholder["role"] = "ai";
@@ -234,4 +311,40 @@ void ConversationManager::updateLastAiMessageContent(const QString &token)
         m_messages.last() = last;
     }
     emit messagesChanged();
+}
+
+QString ConversationManager::currentAudioUrl() const
+{
+    return m_currentAudioUrl;
+}
+
+bool ConversationManager::ttsPending() const
+{
+    return m_ttsPending;
+}
+
+void ConversationManager::setResponseType(int type)
+{
+    m_responseType = type;
+}
+
+void ConversationManager::setDigitalHumanId(int id)
+{
+    m_digitalHumanId = id;
+}
+
+void ConversationManager::setCurrentAudioUrl(const QString &url)
+{
+    if (m_currentAudioUrl != url) {
+        m_currentAudioUrl = url;
+        emit currentAudioUrlChanged();
+    }
+}
+
+void ConversationManager::setTtsPending(bool pending)
+{
+    if (m_ttsPending != pending) {
+        m_ttsPending = pending;
+        emit ttsPendingChanged();
+    }
 }

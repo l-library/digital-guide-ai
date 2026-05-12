@@ -11,6 +11,36 @@ Page {
 
     property string inputMode: "text"
     property string outputMode: "digitHuman"
+    property bool voiceRequestInFlight: false
+    property string ttsStatus: ""
+
+    Component.onCompleted: {
+        if (digitalHumanManager && digitalHumanManager.currentDigitalHuman && conversationManager) {
+            conversationManager.setDigitalHumanId(digitalHumanManager.currentDigitalHuman.id)
+        }
+        if (conversationManager) {
+            conversationManager.setResponseType(root.outputMode === "digitHuman" ? 1 : 0)
+        }
+    }
+
+    onOutputModeChanged: {
+        if (conversationManager) {
+            conversationManager.setResponseType(root.outputMode === "digitHuman" ? 1 : 0)
+        }
+    }
+
+    Timer {
+        id: voiceTimeoutTimer
+        interval: 30000
+        onTriggered: {
+            if (voiceRequestInFlight) {
+                voiceRequestInFlight = false
+                if (voiceInterface) {
+                    voiceInterface.finishProcessing()
+                }
+            }
+        }
+    }
 
     header: ToolBar {
         background: Rectangle { color: "#1976D2" }
@@ -76,6 +106,10 @@ Page {
                     if (digitalHumanManager && digitalHumanManager.digitalHumans.length > 0) {
                         digitalHumanManager.switchTo(
                             (digitalHumanManager.currentIndex + 1) % Math.max(digitalHumanManager.digitalHumans.length, 1))
+                        var dh = digitalHumanManager.currentDigitalHuman
+                        if (dh && conversationManager) {
+                            conversationManager.setDigitalHumanId(dh.id)
+                        }
                     }
                 }
             }
@@ -354,6 +388,33 @@ Page {
         }
     }
 
+    Dialog {
+        id: errorDialog
+        title: qsTr("错误")
+        anchors.centerIn: parent
+        standardButtons: Dialog.Ok
+        modal: true
+
+        property string errorMessage: ""
+
+        onOpened: {
+            errorLabel.text = errorMessage
+        }
+
+        ColumnLayout {
+            spacing: 12
+            anchors { left: parent.left; right: parent.right }
+
+            Label {
+                id: errorLabel
+                text: ""
+                font.pixelSize: 14
+                wrapMode: Text.Wrap
+                Layout.fillWidth: true
+            }
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -415,12 +476,116 @@ Page {
             }
         }
 
-        Rectangle{
+        Rectangle {
             id: digitHumanDisplay
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
             visible: root.outputMode === "digitHuman"
+            color: "#F5F5F5"
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 24
+                spacing: 16
+
+                Item { Layout.fillHeight: true }
+
+                Rectangle {
+                    width: 96
+                    height: 96
+                    radius: 48
+                    color: audioPlayer && audioPlayer.playing ? "#C8E6C9" : "#E3F2FD"
+                    Layout.alignment: Qt.AlignHCenter
+                    visible: root.outputMode === "digitHuman"
+
+                    SequentialAnimation on border.color {
+                        running: audioPlayer && audioPlayer.playing
+                        loops: Animation.Infinite
+                        ColorAnimation { from: "#1976D2"; to: "#4CAF50"; duration: 600 }
+                        ColorAnimation { from: "#4CAF50"; to: "#1976D2"; duration: 600 }
+                    }
+
+                    border.width: 3
+                    border.color: "#1976D2"
+                    clip: true
+
+                    Image {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        source: "qrc:/asset/avatar.jpeg"
+                        fillMode: Image.PreserveAspectCrop
+                        smooth: true
+                    }
+                }
+
+                Label {
+                    id: statusLabel
+                    Layout.alignment: Qt.AlignHCenter
+                    font.pixelSize: 15
+                    color: "#666"
+                    text: {
+                        if (audioPlayer && audioPlayer.playing) {
+                            return audioPlayer.statusText || qsTr("正在播放语音...")
+                        }
+                        if (root.ttsStatus === "synthesizing") {
+                            return qsTr("语音合成中...")
+                        }
+                        if (conversationManager && conversationManager.streamingAiResponse) {
+                            return qsTr("正在思考...")
+                        }
+                        if (root.ttsStatus === "ready") {
+                            return qsTr("语音回复就绪")
+                        }
+                        return qsTr("等待提问...")
+                    }
+                    visible: root.outputMode === "digitHuman"
+                }
+
+                ProgressBar {
+                    id: ttsProgressBar
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.preferredWidth: 200
+                    visible: root.outputMode === "digitHuman" && (root.ttsStatus === "synthesizing" || (audioPlayer && audioPlayer.playing))
+                    indeterminate: true
+                }
+
+                Rectangle {
+                    id: aiResponseBox
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: aiResponseText.implicitHeight + 24
+                    Layout.maximumHeight: parent.height * 0.5
+                    color: "white"
+                    radius: 12
+                    border.width: 1
+                    border.color: "#E0E0E0"
+                    visible: root.outputMode === "digitHuman" && conversationManager && conversationManager.messages.length > 0
+
+                    ScrollView {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        clip: true
+
+                        Text {
+                            id: aiResponseText
+                            text: {
+                                if (!conversationManager || !conversationManager.messages.length)
+                                    return ""
+                                var lastMsg = conversationManager.messages[conversationManager.messages.length - 1]
+                                if (lastMsg && (lastMsg.role === "ai" || lastMsg.role === "assistant"))
+                                    return lastMsg.content
+                                return ""
+                            }
+                            font.pixelSize: 15
+                            color: "#333"
+                            wrapMode: Text.WordWrap
+                            visible: root.outputMode === "digitHuman"
+                        }
+                    }
+                }
+
+                Item { Layout.fillHeight: true }
+            }
         }
 
         Rectangle {
@@ -476,6 +641,7 @@ Page {
 
                         onClicked: {
                             if (conversationManager) {
+                                conversationManager.setResponseType(root.outputMode === "digitHuman" ? 1 : 0)
                                 conversationManager.sendMessage(inputField.text)
                                 inputField.text = ""
                             }
@@ -490,11 +656,11 @@ Page {
                     spacing: 8
                     visible: root.inputMode === "voice"
 
-                    Button {
+Button {
                         icon.source: "qrc:/asset/text.png"
                         font.pixelSize: 12
                         flat: true
-                        visible: root.inputMode = "voice"
+                        visible: root.inputMode === "voice"
                         onClicked: root.inputMode = "text"
                     }
 
@@ -502,19 +668,23 @@ Page {
                         id: recordBtn
                         Layout.fillWidth: true
                         Layout.preferredHeight: 48
-                        text: (voiceInterface && voiceInterface.state === voiceInterface.Recording)
+                        text: (voiceInterface && voiceInterface.state === 1)
                               ? qsTr("■ 停止录音")
+                              : (voiceInterface && voiceInterface.state === 2)
+                              ? qsTr("处理中...")
                               : qsTr("🎤 按住说话")
                         font.pixelSize: 16
-                        Material.background: (voiceInterface && voiceInterface.state === voiceInterface.Recording)
+                        Material.background: (voiceInterface && voiceInterface.state === 1)
                                               ? Material.Red : Material.accent
                         Material.foreground: "white"
+                        enabled: voiceInterface && voiceInterface.state !== 2
 
                         onClicked: {
                             if (voiceInterface) {
-                                if (voiceInterface.state === voiceInterface.Idle) {
+                                console.log("Voice button clicked, state:", voiceInterface.state)
+                                if (voiceInterface.state === 0) {
                                     voiceInterface.startRecording()
-                                } else if (voiceInterface.state === voiceInterface.Recording) {
+                                } else if (voiceInterface.state === 1) {
                                     voiceInterface.stopRecording()
                                 }
                             }
@@ -531,15 +701,82 @@ Page {
         function onMessageSending() {
             Qt.callLater(() => messageList.positionViewAtEnd())
         }
+        function onMessagesChanged() {
+            if (voiceRequestInFlight) {
+                voiceRequestInFlight = false
+                voiceTimeoutTimer.stop()
+                if (voiceInterface) {
+                    voiceInterface.finishProcessing()
+                }
+            }
+        }
+        function onErrorOccurred(error) {
+            if (voiceRequestInFlight) {
+                voiceRequestInFlight = false
+                voiceTimeoutTimer.stop()
+                if (voiceInterface) {
+                    voiceInterface.finishProcessing()
+                }
+            }
+            root.ttsStatus = ""
+            errorDialog.errorMessage = error
+            errorDialog.open()
+        }
+        function onCurrentAudioUrlChanged() {
+            var url = conversationManager.currentAudioUrl
+            if (url && root.outputMode === "digitHuman" && audioPlayer) {
+                root.ttsStatus = "synthesizing"
+                audioPlayer.play(url)
+            }
+        }
+        function onTtsPendingChanged() {
+            if (conversationManager.ttsPending) {
+                root.ttsStatus = "synthesizing"
+            }
+        }
+        function onStreamingAiResponseChanged() {
+            if (!conversationManager.streamingAiResponse) {
+                if (conversationManager.currentAudioUrl === "" || conversationManager.currentAudioUrl === undefined) {
+                    root.ttsStatus = ""
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: audioPlayer
+        enabled: audioPlayer !== null
+        function onPlayingChanged() {
+            if (audioPlayer && !audioPlayer.playing) {
+                root.ttsStatus = "ready"
+            }
+        }
+        function onPlaybackFinished() {
+            root.ttsStatus = ""
+        }
     }
 
     Connections {
         target: voiceInterface
         enabled: voiceInterface !== null
-        function onVoiceInputReceived(text) {
-            if (text && text.trim() !== "" && conversationManager) {
-                conversationManager.sendMessage(text)
+        function onVoiceRecordingReady(filePath) {
+            if (!conversationManager) return
+            if (!conversationManager.hasConversation) {
+                voiceInterface.finishProcessing()
+                errorDialog.errorMessage = qsTr("请先创建或选择一个对话，再开始录音")
+                errorDialog.open()
+                return
             }
+            voiceRequestInFlight = true
+            voiceTimeoutTimer.start()
+            conversationManager.setResponseType(root.outputMode === "digitHuman" ? 1 : 0)
+            conversationManager.sendVoiceMessage(filePath)
+        }
+        function onErrorOccurred(error) {
+            voiceRequestInFlight = false
+            voiceTimeoutTimer.stop()
+            errorDialog.errorMessage = error
+            errorDialog.open()
         }
     }
 }
