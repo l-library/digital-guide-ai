@@ -35,6 +35,7 @@ public:
     Q_INVOKABLE int startNewConversation(int userId, const QString &title, int knowledgeDocId = -1);
     Q_INVOKABLE void clearCurrentConversation();
     Q_INVOKABLE void loadConversationList(int userId);
+    Q_INVOKABLE void autoLoadOrCreateConversation(int userId);
     Q_INVOKABLE void renameCurrentConversation(const QString &newTitle);
     Q_INVOKABLE void renameConversationById(int conversationId, const QString &newTitle);
     Q_INVOKABLE void connectWebSocket();
@@ -63,6 +64,7 @@ private:
     int m_digitalHumanId = 1;
     bool m_streaming = false;
     bool m_pendingNewConversation = false;
+    bool m_autoLoadPending = false;
     int m_pendingKnowledgeDocId = -1;
     QStringList m_pendingMessages;
     QString m_pendingVoiceFilePath;

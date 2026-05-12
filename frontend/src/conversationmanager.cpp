@@ -38,13 +38,21 @@ ConversationManager::ConversationManager(QObject *parent)
         }
 
         emit messagesChanged();
-        if (m_currentUserId > 0) {
-            loadConversationList(m_currentUserId);
-        }
     });
     connect(&api, &ApiService::conversationsLoaded, this, [this](QVariantList convs) {
         m_conversations = convs;
         emit conversationsChanged();
+
+        if (m_autoLoadPending) {
+            m_autoLoadPending = false;
+            if (!convs.isEmpty()) {
+                QVariantMap first = convs.first().toMap();
+                int convId = first["id"].toInt();
+                loadConversation(convId);
+            } else {
+                startNewConversation(m_currentUserId, QStringLiteral("新对话"));
+            }
+        }
     });
 
     connect(&api, &ApiService::wsTokenReceived, this, [this](int conversationId, const QString &token) {
@@ -159,7 +167,6 @@ void ConversationManager::sendMessage(const QString &text)
         m_pendingMessages.append(text.trimmed());
         appendMessage("user", text.trimmed());
         emit messageSending();
-        ApiService::instance().createConversation(m_currentUserId, m_currentTitle, m_pendingKnowledgeDocId);
         return;
     }
 
@@ -178,7 +185,6 @@ void ConversationManager::sendVoiceMessage(const QString &audioFilePath)
     if (m_pendingNewConversation) {
         m_pendingVoiceFilePath = audioFilePath;
         emit messageSending();
-        ApiService::instance().createConversation(m_currentUserId, m_currentTitle, m_pendingKnowledgeDocId);
         return;
     }
 
@@ -216,11 +222,15 @@ int ConversationManager::startNewConversation(int userId, const QString &title, 
     m_currentTitle = title;
     m_currentConversationId = -1;
     m_pendingNewConversation = true;
+    m_autoLoadPending = false;
     m_pendingKnowledgeDocId = knowledgeDocId;
     m_pendingVoiceFilePath.clear();
     m_messages.clear();
     emit currentConversationChanged();
     emit messagesChanged();
+
+    // 立即在后端创建空对话记录，使其出现在对话列表中
+    ApiService::instance().createConversation(userId, title, knowledgeDocId);
 
     if (!ApiService::instance().isWebSocketConnected()) {
         ApiService::instance().connectWebSocket();
@@ -236,6 +246,7 @@ void ConversationManager::clearCurrentConversation()
     m_messages.clear();
     m_streaming = false;
     m_pendingNewConversation = false;
+    m_autoLoadPending = false;
     m_pendingMessages.clear();
     m_pendingVoiceFilePath.clear();
     m_currentAudioUrl.clear();
@@ -249,6 +260,13 @@ void ConversationManager::clearCurrentConversation()
 
 void ConversationManager::loadConversationList(int userId)
 {
+    ApiService::instance().loadConversations(userId);
+}
+
+void ConversationManager::autoLoadOrCreateConversation(int userId)
+{
+    m_currentUserId = userId;
+    m_autoLoadPending = true;
     ApiService::instance().loadConversations(userId);
 }
 
