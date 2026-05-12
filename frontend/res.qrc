@@ -12,5 +12,6 @@
         <file>asset/setting.png</file>
         <file>asset/text.png</file>
         <file>asset/voice.png</file>
+        <file>asset/logo.ico</file>
     </qresource>
 </RCC>

@@ -8,12 +8,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_AUTORCC ON)
 
+if(WIN32)
+    set(APP_ICON_RESOURCE_WINDOWS ${CMAKE_CURRENT_SOURCE_DIR}/app.rc)
+endif()
+
 find_package(Qt6 REQUIRED COMPONENTS Quick QuickControls2 Network WebSockets QuickEffects Multimedia)
 
 qt_standard_project_setup(REQUIRES 6.10)
 
 qt_add_executable(appdigital_guide_ai
     main.cpp
+    ${APP_ICON_RESOURCE_WINDOWS}
     src/apiservice.cpp
     src/loginmanager.cpp
     src/conversationmanager.cpp
