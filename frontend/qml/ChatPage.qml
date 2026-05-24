@@ -484,6 +484,25 @@ Page {
             visible: root.outputMode === "digitHuman"
             color: "#F5F5F5"
 
+            Rectangle {
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.margins: 8
+                width: connLabel.implicitWidth + 16
+                height: connLabel.implicitHeight + 8
+                radius: 4
+                color: (liveTalkingClient && liveTalkingClient.connected) ? "#4CAF50" : "#F44336"
+                visible: root.outputMode === "digitHuman"
+
+                Label {
+                    id: connLabel
+                    anchors.centerIn: parent
+                    text: (liveTalkingClient && liveTalkingClient.connected) ? qsTr("数字人已连接") : qsTr("数字人未连接")
+                    font.pixelSize: 11
+                    color: "white"
+                }
+            }
+
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 24
@@ -492,12 +511,26 @@ Page {
                 Item { Layout.fillHeight: true }
 
                 Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: parent.height * 0.55
+                    Layout.alignment: Qt.AlignHCenter
+                    color: "#1A1A2E"
+                    radius: 12
+                    clip: true
+                    visible: root.outputMode === "digitHuman" && liveTalkingClient && liveTalkingClient.connected
+
+                    DigitalHumanView {
+                        anchors.fill: parent
+                    }
+                }
+
+                Rectangle {
                     width: 96
                     height: 96
                     radius: 48
                     color: audioPlayer && audioPlayer.playing ? "#C8E6C9" : "#E3F2FD"
                     Layout.alignment: Qt.AlignHCenter
-                    visible: root.outputMode === "digitHuman"
+                    visible: root.outputMode === "digitHuman" && !(liveTalkingClient && liveTalkingClient.connected)
 
                     SequentialAnimation on border.color {
                         running: audioPlayer && audioPlayer.playing
@@ -525,6 +558,9 @@ Page {
                     font.pixelSize: 15
                     color: "#666"
                     text: {
+                        if (liveTalkingClient && liveTalkingClient.connected && liveTalkingClient.speaking) {
+                            return qsTr("数字人说话中...")
+                        }
                         if (audioPlayer && audioPlayer.playing) {
                             return audioPlayer.statusText || qsTr("正在播放语音...")
                         }
@@ -643,6 +679,9 @@ Page {
                             if (conversationManager) {
                                 conversationManager.setResponseType(root.outputMode === "digitHuman" ? 1 : 0)
                                 conversationManager.sendMessage(inputField.text)
+                                if (root.outputMode === "digitHuman" && liveTalkingClient && liveTalkingClient.connected) {
+                                    liveTalkingClient.sendText(inputField.text)
+                                }
                                 inputField.text = ""
                             }
                         }

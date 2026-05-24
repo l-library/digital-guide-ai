@@ -2,6 +2,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QQuickImageProvider>
 
 #include "src/apiservice.h"
 #include "src/loginmanager.h"
@@ -11,6 +12,7 @@
 #include "src/voiceinterface.h"
 #include "src/digitalhumanmanager.h"
 #include "src/audioplayer.h"
+#include "src/livetalkingclient.h"
 
 int main(int argc, char *argv[])
 {
@@ -26,6 +28,7 @@ int main(int argc, char *argv[])
     VoiceInterface voiceInterface;
     DigitalHumanManager digitalHumanManager;
     AudioPlayer audioPlayer;
+    LiveTalkingClient liveTalkingClient;
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("loginManager", &loginManager);
@@ -35,6 +38,9 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("voiceInterface", &voiceInterface);
     engine.rootContext()->setContextProperty("digitalHumanManager", &digitalHumanManager);
     engine.rootContext()->setContextProperty("audioPlayer", &audioPlayer);
+    engine.rootContext()->setContextProperty("liveTalkingClient", &liveTalkingClient);
+
+    engine.addImageProvider("livetalking", new LiveTalkingImageProvider(&liveTalkingClient));
 
     QObject::connect(
         &engine,
@@ -44,6 +50,10 @@ int main(int argc, char *argv[])
         Qt::QueuedConnection);
 
     engine.loadFromModule("digital_guide_ai", "Main");
+
+    QString ltHost = ConfigManager::getLiveTalkingHost();
+    int ltPort = ConfigManager::getLiveTalkingPort();
+    liveTalkingClient.connectToServer(ltHost, ltPort);
 
     return QCoreApplication::exec();
 }

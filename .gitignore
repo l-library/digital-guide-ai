@@ -18,9 +18,11 @@ __pycache__/
 backend/models/
 backend/LiveTalking/models/
 *.pth
+*.pt
 *.onnx
 *.safetensors
 *.bin
+*.ckpt
 
 # ── 向量数据库（运行产物） ──
 backend/vector_store/
@@ -61,5 +63,7 @@ Thumbs.db
 # ── 前端构建产物 ──
 frontend/build/
 
-# ── Claude Code / 工具链 ──
+# ── 工具链 ──
 .claude/
+.sisyphus/
+.opencode/

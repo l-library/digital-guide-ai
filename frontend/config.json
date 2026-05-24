@@ -1,7 +1,10 @@
 {
     "backend": {
         "ip": "http://localhost",
-        "port": 8000,
-        "protocol": "http"
+        "port": 8000
+    },
+    "livetalking": {
+        "host": "http://localhost",
+        "port": 8010
     }
 }

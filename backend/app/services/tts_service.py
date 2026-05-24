@@ -2,8 +2,7 @@ import edge_tts
 import os
 import uuid
 
-# 一个中文女声
-VOICE = "zh-CN-XiaoxiaoNeural"
+VOICE = os.getenv("TTS_VOICE", "zh-CN-XiaoxiaoNeural")
 
 
 async def synthesize_audio(text: str, output_path: str):
