@@ -71,6 +71,16 @@ int LiveTalkingClient::frameCount() const
     return m_frameCount;
 }
 
+int LiveTalkingClient::frameWidth() const
+{
+    return m_frameWidth;
+}
+
+int LiveTalkingClient::frameHeight() const
+{
+    return m_frameHeight;
+}
+
 QImage LiveTalkingClient::currentFrame() const
 {
     QMutexLocker locker(&m_frameMutex);
@@ -169,9 +179,12 @@ void LiveTalkingClient::onDisconnected()
         m_currentFrame = QImage();
         m_frameCount = 0;
     }
+    m_frameWidth = 0;
+    m_frameHeight = 0;
     emit connectedChanged();
     emit speakingChanged();
     emit frameUpdated();
+    emit frameSizeChanged();
     emit sessionChanged();
 }
 
@@ -243,12 +256,21 @@ void LiveTalkingClient::processVideoFrame(const QByteArray &payload)
     QByteArray jpegData = payload.mid(4);
     QImage frame;
     if (frame.loadFromData(jpegData, "JPEG")) {
+        bool sizeChanged = false;
         {
             QMutexLocker locker(&m_frameMutex);
             m_currentFrame = frame;
             m_frameCount++;
+            if (m_frameWidth != frame.width() || m_frameHeight != frame.height()) {
+                m_frameWidth = frame.width();
+                m_frameHeight = frame.height();
+                sizeChanged = true;
+            }
         }
-        if (m_frameCount % 50 == 1) {
+        if (sizeChanged) {
+            emit frameSizeChanged();
+        }
+        if (m_frameCount % 50 == 1 || sizeChanged) {
             qDebug() << "LiveTalking: video frame #" << m_frameCount
                      << "size:" << frame.width() << "x" << frame.height();
         }

@@ -28,6 +28,8 @@ class LiveTalkingClient : public QObject
     Q_PROPERTY(bool speaking READ speaking NOTIFY speakingChanged)
     Q_PROPERTY(int frameCount READ frameCount NOTIFY frameUpdated)
     Q_PROPERTY(QString sessionId READ sessionId NOTIFY sessionChanged)
+    Q_PROPERTY(int frameWidth READ frameWidth NOTIFY frameSizeChanged)
+    Q_PROPERTY(int frameHeight READ frameHeight NOTIFY frameSizeChanged)
 
 public:
     explicit LiveTalkingClient(QObject *parent = nullptr);
@@ -36,6 +38,8 @@ public:
     bool connected() const;
     bool speaking() const;
     int frameCount() const;
+    int frameWidth() const;
+    int frameHeight() const;
     QImage currentFrame() const;
     QString sessionId() const;
 
@@ -49,6 +53,7 @@ signals:
     void connectedChanged();
     void speakingChanged();
     void frameUpdated();
+    void frameSizeChanged();
     void sessionChanged();
     void errorOccurred(const QString &error);
 
@@ -70,6 +75,8 @@ private:
     bool m_connected = false;
     bool m_speaking = false;
     int m_frameCount = 0;
+    int m_frameWidth = 0;
+    int m_frameHeight = 0;
 
     // Audio playback
     QAudioSink *m_audioSink = nullptr;

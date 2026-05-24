@@ -482,8 +482,67 @@ Page {
             Layout.fillHeight: true
             clip: true
             visible: root.outputMode === "digitHuman"
-            color: "#F5F5F5"
+            color: "#1A1A2E"
 
+            // 数字人视频区域 - 占满整个显示区域
+            Rectangle {
+                anchors.fill: parent
+                color: "#1A1A2E"
+                clip: true
+                visible: liveTalkingClient && liveTalkingClient.connected
+
+                DigitalHumanView {
+                    anchors.fill: parent
+                }
+            }
+
+            // 未连接时的头像占位
+            Rectangle {
+                anchors.fill: parent
+                color: "#F5F5F5"
+                visible: !(liveTalkingClient && liveTalkingClient.connected)
+
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 16
+
+                    Rectangle {
+                        width: 120
+                        height: 120
+                        radius: 60
+                        color: audioPlayer && audioPlayer.playing ? "#C8E6C9" : "#E3F2FD"
+                        anchors.horizontalCenter: parent.horizontalCenter
+
+                        SequentialAnimation on border.color {
+                            running: audioPlayer && audioPlayer.playing
+                            loops: Animation.Infinite
+                            ColorAnimation { from: "#1976D2"; to: "#4CAF50"; duration: 600 }
+                            ColorAnimation { from: "#4CAF50"; to: "#1976D2"; duration: 600 }
+                        }
+
+                        border.width: 3
+                        border.color: "#1976D2"
+                        clip: true
+
+                        Image {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            source: "qrc:/asset/avatar.jpeg"
+                            fillMode: Image.PreserveAspectCrop
+                            smooth: true
+                        }
+                    }
+
+                    Label {
+                        text: qsTr("数字人未连接")
+                        font.pixelSize: 14
+                        color: "#999"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                    }
+                }
+            }
+
+            // 右上角连接状态徽章 - 半透明叠加在视频上
             Rectangle {
                 anchors.top: parent.top
                 anchors.right: parent.right
@@ -492,7 +551,7 @@ Page {
                 height: connLabel.implicitHeight + 8
                 radius: 4
                 color: (liveTalkingClient && liveTalkingClient.connected) ? "#4CAF50" : "#F44336"
-                visible: root.outputMode === "digitHuman"
+                opacity: 0.85
 
                 Label {
                     id: connLabel
@@ -503,124 +562,92 @@ Page {
                 }
             }
 
-            ColumnLayout {
-                anchors.fill: parent
-                anchors.margins: 24
-                spacing: 16
+            // 底部状态栏 - 半透明叠加
+            Rectangle {
+                id: bottomStatusBar
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: statusBarContent.height + 20
+                color: "#B3000000"
+                visible: true
 
-                Item { Layout.fillHeight: true }
+                ColumnLayout {
+                    id: statusBarContent
+                    anchors.centerIn: parent
+                    width: parent.width - 32
+                    spacing: 4
 
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: parent.height * 0.55
-                    Layout.alignment: Qt.AlignHCenter
-                    color: "#1A1A2E"
-                    radius: 12
-                    clip: true
-                    visible: root.outputMode === "digitHuman" && liveTalkingClient && liveTalkingClient.connected
-
-                    DigitalHumanView {
-                        anchors.fill: parent
-                    }
-                }
-
-                Rectangle {
-                    width: 96
-                    height: 96
-                    radius: 48
-                    color: audioPlayer && audioPlayer.playing ? "#C8E6C9" : "#E3F2FD"
-                    Layout.alignment: Qt.AlignHCenter
-                    visible: root.outputMode === "digitHuman" && !(liveTalkingClient && liveTalkingClient.connected)
-
-                    SequentialAnimation on border.color {
-                        running: audioPlayer && audioPlayer.playing
-                        loops: Animation.Infinite
-                        ColorAnimation { from: "#1976D2"; to: "#4CAF50"; duration: 600 }
-                        ColorAnimation { from: "#4CAF50"; to: "#1976D2"; duration: 600 }
-                    }
-
-                    border.width: 3
-                    border.color: "#1976D2"
-                    clip: true
-
-                    Image {
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        source: "qrc:/asset/avatar.jpeg"
-                        fillMode: Image.PreserveAspectCrop
-                        smooth: true
-                    }
-                }
-
-                Label {
-                    id: statusLabel
-                    Layout.alignment: Qt.AlignHCenter
-                    font.pixelSize: 15
-                    color: "#666"
-                    text: {
-                        if (liveTalkingClient && liveTalkingClient.connected && liveTalkingClient.speaking) {
-                            return qsTr("数字人说话中...")
-                        }
-                        if (audioPlayer && audioPlayer.playing) {
-                            return audioPlayer.statusText || qsTr("正在播放语音...")
-                        }
-                        if (root.ttsStatus === "synthesizing") {
-                            return qsTr("语音合成中...")
-                        }
-                        if (conversationManager && conversationManager.streamingAiResponse) {
-                            return qsTr("正在思考...")
-                        }
-                        if (root.ttsStatus === "ready") {
-                            return qsTr("语音回复就绪")
-                        }
-                        return qsTr("等待提问...")
-                    }
-                    visible: root.outputMode === "digitHuman"
-                }
-
-                ProgressBar {
-                    id: ttsProgressBar
-                    Layout.alignment: Qt.AlignHCenter
-                    Layout.preferredWidth: 200
-                    visible: root.outputMode === "digitHuman" && (root.ttsStatus === "synthesizing" || (audioPlayer && audioPlayer.playing))
-                    indeterminate: true
-                }
-
-                Rectangle {
-                    id: aiResponseBox
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: aiResponseText.implicitHeight + 24
-                    Layout.maximumHeight: parent.height * 0.5
-                    color: "white"
-                    radius: 12
-                    border.width: 1
-                    border.color: "#E0E0E0"
-                    visible: root.outputMode === "digitHuman" && conversationManager && conversationManager.messages.length > 0
-
-                    ScrollView {
-                        anchors.fill: parent
-                        anchors.margins: 12
-                        clip: true
-
-                        Text {
-                            id: aiResponseText
-                            text: {
-                                if (!conversationManager || !conversationManager.messages.length)
-                                    return ""
-                                var lastMsg = conversationManager.messages[conversationManager.messages.length - 1]
-                                if (lastMsg && (lastMsg.role === "ai" || lastMsg.role === "assistant"))
-                                    return lastMsg.content
-                                return ""
+                    Label {
+                        id: statusLabel
+                        Layout.alignment: Qt.AlignHCenter
+                        font.pixelSize: 14
+                        color: "#E0E0E0"
+                        text: {
+                            if (liveTalkingClient && liveTalkingClient.connected && liveTalkingClient.speaking) {
+                                return qsTr("数字人说话中...")
                             }
-                            font.pixelSize: 15
-                            color: "#333"
-                            wrapMode: Text.WordWrap
-                            visible: root.outputMode === "digitHuman"
+                            if (audioPlayer && audioPlayer.playing) {
+                                return audioPlayer.statusText || qsTr("正在播放语音...")
+                            }
+                            if (root.ttsStatus === "synthesizing") {
+                                return qsTr("语音合成中...")
+                            }
+                            if (conversationManager && conversationManager.streamingAiResponse) {
+                                return qsTr("正在思考...")
+                            }
+                            if (root.ttsStatus === "ready") {
+                                return qsTr("语音回复就绪")
+                            }
+                            return qsTr("等待提问...")
                         }
                     }
-                }
 
-                Item { Layout.fillHeight: true }
+                    ProgressBar {
+                        id: ttsProgressBar
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 160
+                        visible: root.outputMode === "digitHuman" && (root.ttsStatus === "synthesizing" || (audioPlayer && audioPlayer.playing))
+                        indeterminate: true
+                    }
+                }
+            }
+
+            // AI回复文本 - 底部半透明浮层，叠加在视频上方
+            Rectangle {
+                id: aiResponseBox
+                anchors.bottom: bottomStatusBar.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                anchors.bottomMargin: 4
+                height: Math.min(aiResponseText.implicitHeight + 24, parent.height * 0.35)
+                color: "#CC000000"
+                radius: 10
+                visible: root.outputMode === "digitHuman" && conversationManager && conversationManager.messages.length > 0
+                         && aiResponseText.text !== ""
+
+                ScrollView {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    clip: true
+
+                    Text {
+                        id: aiResponseText
+                        text: {
+                            if (!conversationManager || !conversationManager.messages.length)
+                                return ""
+                            var lastMsg = conversationManager.messages[conversationManager.messages.length - 1]
+                            if (lastMsg && (lastMsg.role === "ai" || lastMsg.role === "assistant"))
+                                return lastMsg.content
+                            return ""
+                        }
+                        font.pixelSize: 14
+                        color: "#E0E0E0"
+                        wrapMode: Text.WordWrap
+                    }
+                }
             }
         }
 
