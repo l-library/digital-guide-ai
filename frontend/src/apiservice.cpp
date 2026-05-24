@@ -13,7 +13,8 @@
 #include <QNetworkRequest>
 #include <QUrlQuery>
 
-static const QString BASE_URL = QStringLiteral("http://localhost:8000");
+static const QString BASE_URL = ConfigManager::getBackendIP() + ":"
+                                + QString::number(ConfigManager::getBackendPort());
 
 ApiService &ApiService::instance()
 {

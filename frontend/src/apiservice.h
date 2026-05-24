@@ -9,6 +9,43 @@
 #include <QNetworkReply>
 #include <QWebSocket>
 
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+// 读取配置文件
+class ConfigManager
+{
+public:
+    static QString getBackendIP()
+    {
+        QFile file("config.json");
+        if (!file.open(QIODevice::ReadOnly)) {
+            qDebug() << "Fail to read config.json!";
+            return "127.0.0.1"; // 默认值
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        QJsonObject obj = doc.object();
+        QString IP = obj["backend"].toObject()["ip"].toString();
+        qDebug() << "Read ip:" << IP;
+        return IP;
+    }
+    static int getBackendPort()
+    {
+        QFile file("config.json");
+        if (!file.open(QIODevice::ReadOnly)) {
+            qDebug() << "Fail to read config.json!";
+            return 8000; // 默认值
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        QJsonObject obj = doc.object();
+        int Port = obj["backend"].toObject()["port"].toInt();
+        qDebug() << "Read port:" << Port;
+        return Port;
+    }
+};
+
 class ApiService : public QObject
 {
     Q_OBJECT

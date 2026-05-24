@@ -1,9 +1,9 @@
 #ifndef AUDIOPLAYER_H
 #define AUDIOPLAYER_H
 
-#include <QObject>
-#include <QMediaPlayer>
 #include <QAudioOutput>
+#include <QMediaPlayer>
+#include <QObject>
 #include <QUrl>
 
 class AudioPlayer : public QObject
