@@ -50,3 +50,4 @@ class Message(Base):
             "knowledge_sources": self.knowledge_sources,
             "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
         }
+
