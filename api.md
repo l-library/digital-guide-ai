@@ -205,7 +205,7 @@ POST /chat/text
 | ------------------ | ------ | ---- | ---------------------------------------- |
 | `conversation_id`  | int    | 是   | 当前对话 ID                              |
 | `content`          | string | 是   | 用户消息                                 |
-| `response_type`    | int    | 是   | 需要的输出方式，1为语音输出，0为文字输出 |
+| `response_type`    | int    | 是   | 需要的输出方式，1为语音+文字输出，0为仅文字输出。当输出模式为"数字人"时应传1，为"文字输出"时应传0 |
 | `digital_human_id` | int    | 否   | 数字人形象 ID，不传使用默认              |
 
 **Response `data`:**
@@ -256,6 +256,61 @@ POST /chat/voice
 ```
 
 > 前端拿到 `audio_url` 后可直接播放，同时显示 `content` 文本。
+
+### 2.2a 语音流式问答
+
+```
+POST /chat/voice_stream
+```
+
+上传语音文件，流式返回识别文本与 LLM 回复。编码格式：`multipart/form-data`。响应为 SSE（Server-Sent Events）流。
+
+**Form Data:**
+
+| 字段               | 类型 | 必填 | 说明                             |
+| ------------------ | ---- | ---- | -------------------------------- |
+| `audio`            | File | 是   | 语音文件，WAV/MP3/OGG，最大 10MB |
+| `conversation_id`  | int  | 是   | 当前对话 ID                      |
+| `digital_human_id` | int  | 否   | 数字人形象 ID                    |
+| `response_type`    | int  | 否   | 输出方式，1为语音+文字输出，0为仅文字输出，默认1 |
+
+**SSE 事件流：**
+
+1. **识别结果事件**（ASR 完成后立即推送）：
+
+```
+data: {"type": "transcribed_text", "conversation_id": 1, "content": "故宫建于哪一年？"}
+```
+
+2. **LLM token 事件**（逐 token 流式输出）：
+
+```
+data: {"type": "token", "conversation_id": 1, "content": "故宫"}
+data: {"type": "token", "conversation_id": 1, "content": "（紫禁城）"}
+```
+
+3. **完成事件**：
+
+```
+data: {"type": "done", "conversation_id": 1, "message_id": 42, "full_content": "故宫（紫禁城）建于明永乐四年（1406年）...", "audio_url": "/api/v1/download_audio?filename=xxx.mp3", "knowledge_sources": ["景区知识库"]}
+```
+
+4. **错误事件**：
+
+```
+data: {"type": "error", "conversation_id": 1, "message": "语音识别失败: ..."}
+```
+
+| type              | 说明                                       |
+| ----------------- | ------------------------------------------ |
+| `transcribed_text` | ASR 识别结果，前端应立即将其显示为用户消息 |
+| `token`           | LLM 逐 token 流式输出                      |
+| `done`            | 回复结束，携带完整信息                     |
+| `error`           | 错误消息                                   |
+
+> **交互流程：** 前端录音 → 上传音频 → 收到 `transcribed_text` 事件后显示识别文本 → 收到 `token` 事件逐字追加 AI 回复 → 收到 `done` 结束。
+>
+> **与 WebSocket 的对比：** 此接口使用 HTTP SSE，无需建立 WebSocket 连接，适合一次性语音问答场景。
 
 ### 2.3 下载语音文件
 
@@ -361,7 +416,8 @@ WebSocket /ws/chat?token=<JWT_TOKEN>
   "type": "chat_message",
   "conversation_id": 1,
   "content": "故宫建于哪一年？",
-  "digital_human_id": 1
+  "digital_human_id": 1,
+  "response_type": 1
 }
 ```
 

@@ -2,6 +2,11 @@
 #define VOICEINTERFACE_H
 
 #include <QObject>
+#include <QUrl>
+
+class QMediaCaptureSession;
+class QMediaRecorder;
+class QAudioInput;
 
 class VoiceInterface : public QObject
 {
@@ -18,6 +23,7 @@ public:
     Q_ENUM(VoiceState)
 
     explicit VoiceInterface(QObject *parent = nullptr);
+    ~VoiceInterface();
 
     VoiceState state() const;
     QString stateText() const;
@@ -25,15 +31,23 @@ public:
     Q_INVOKABLE void startRecording();
     Q_INVOKABLE void stopRecording();
     Q_INVOKABLE void cancelRecording();
+    Q_INVOKABLE void finishProcessing();
 
 signals:
     void stateChanged();
+    void voiceRecordingReady(const QString &filePath);
     void voiceInputReceived(const QString &text);
     void errorOccurred(const QString &error);
 
 private:
     VoiceState m_state = Idle;
+    QMediaCaptureSession *m_captureSession = nullptr;
+    QMediaRecorder *m_recorder = nullptr;
+    QAudioInput *m_audioInput = nullptr;
+    QString m_outputPath;
+
     void setState(VoiceState newState);
+    void setupRecording();
 };
 
 #endif // VOICEINTERFACE_H

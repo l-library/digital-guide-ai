@@ -15,6 +15,8 @@ class ConversationManager : public QObject
     Q_PROPERTY(QString currentTitle READ currentTitle NOTIFY currentConversationChanged)
     Q_PROPERTY(bool hasConversation READ hasConversation NOTIFY currentConversationChanged)
     Q_PROPERTY(bool streamingAiResponse READ streamingAiResponse NOTIFY streamingAiResponseChanged)
+    Q_PROPERTY(QString currentAudioUrl READ currentAudioUrl NOTIFY currentAudioUrlChanged)
+    Q_PROPERTY(bool ttsPending READ ttsPending NOTIFY ttsPendingChanged)
 public:
     explicit ConversationManager(QObject *parent = nullptr);
 
@@ -24,16 +26,23 @@ public:
     QString currentTitle() const;
     bool hasConversation() const;
     bool streamingAiResponse() const;
+    QString currentAudioUrl() const;
+    bool ttsPending() const;
 
     Q_INVOKABLE void sendMessage(const QString &text);
+    Q_INVOKABLE void sendVoiceMessage(const QString &audioFilePath);
     Q_INVOKABLE void loadConversation(int conversationId);
     Q_INVOKABLE int startNewConversation(int userId, const QString &title, int knowledgeDocId = -1);
     Q_INVOKABLE void clearCurrentConversation();
     Q_INVOKABLE void loadConversationList(int userId);
+    Q_INVOKABLE void autoLoadOrCreateConversation(int userId);
     Q_INVOKABLE void renameCurrentConversation(const QString &newTitle);
     Q_INVOKABLE void renameConversationById(int conversationId, const QString &newTitle);
     Q_INVOKABLE void connectWebSocket();
     Q_INVOKABLE void disconnectWebSocket();
+
+    Q_INVOKABLE void setResponseType(int type);
+    Q_INVOKABLE void setDigitalHumanId(int id);
 
 signals:
     void currentConversationChanged();
@@ -42,6 +51,8 @@ signals:
     void streamingAiResponseChanged();
     void messageSending();
     void errorOccurred(const QString &error);
+    void currentAudioUrlChanged();
+    void ttsPendingChanged();
 
 private:
     int m_currentConversationId = -1;
@@ -50,13 +61,20 @@ private:
     QString m_currentTitle;
     int m_currentUserId = -1;
     int m_responseType = 1;
+    int m_digitalHumanId = 1;
     bool m_streaming = false;
     bool m_pendingNewConversation = false;
+    bool m_autoLoadPending = false;
     int m_pendingKnowledgeDocId = -1;
     QStringList m_pendingMessages;
+    QString m_pendingVoiceFilePath;
+    QString m_currentAudioUrl;
+    bool m_ttsPending = false;
 
     void appendMessage(const QString &role, const QString &content);
     void updateLastAiMessageContent(const QString &token);
+    void setCurrentAudioUrl(const QString &url);
+    void setTtsPending(bool pending);
 };
 
 #endif // CONVERSATIONMANAGER_H

@@ -9,6 +9,43 @@
 #include <QNetworkReply>
 #include <QWebSocket>
 
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+// 读取配置文件
+class ConfigManager
+{
+public:
+    static QString getBackendIP()
+    {
+        QFile file("config.json");
+        if (!file.open(QIODevice::ReadOnly)) {
+            qDebug() << "Fail to read config.json!";
+            return "127.0.0.1"; // 默认值
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        QJsonObject obj = doc.object();
+        QString IP = obj["backend"].toObject()["ip"].toString();
+        qDebug() << "Read ip:" << IP;
+        return IP;
+    }
+    static int getBackendPort()
+    {
+        QFile file("config.json");
+        if (!file.open(QIODevice::ReadOnly)) {
+            qDebug() << "Fail to read config.json!";
+            return 8000; // 默认值
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        QJsonObject obj = doc.object();
+        int Port = obj["backend"].toObject()["port"].toInt();
+        qDebug() << "Read port:" << Port;
+        return Port;
+    }
+};
+
 class ApiService : public QObject
 {
     Q_OBJECT
@@ -39,7 +76,10 @@ public:
     void connectWebSocket();
     void disconnectWebSocket();
     bool isWebSocketConnected() const;
-    void sendChatViaWebSocket(int conversationId, const QString &content, int digitalHumanId = 0);
+    void sendChatViaWebSocket(int conversationId, const QString &content, int digitalHumanId = 0, int responseType = 0);
+
+    // Voice streaming (upload audio + parse SSE)
+    void sendVoiceMessage(int conversationId, const QString &audioFilePath, int digitalHumanId = 0, int responseType = 1);
 
     // Knowledge docs
     void uploadKnowledgeDoc(int userId, const QString &title, const QString &filePath, const QString &content);
@@ -78,8 +118,14 @@ signals:
     void wsConnected();
     void wsDisconnected();
     void wsTokenReceived(int conversationId, const QString &token);
-    void wsDoneReceived(int conversationId, int messageId, const QString &fullContent);
+    void wsDoneReceived(int conversationId, int messageId, const QString &fullContent, const QString &audioUrl);
     void wsError(const QString &message);
+
+    // Voice streaming SSE
+    void voiceTranscribedText(int conversationId, const QString &text);
+    void voiceTokenReceived(int conversationId, const QString &token);
+    void voiceDoneReceived(int conversationId, int messageId, const QString &fullContent, const QString &audioUrl);
+    void voiceError(const QString &message);
 
     // Knowledge docs
     void knowledgeDocUploaded(int docId);
@@ -109,7 +155,9 @@ private:
     QNetworkAccessManager *m_networkManager;
     QWebSocket *m_webSocket;
     QNetworkReply *m_streamReply = nullptr;
+    QNetworkReply *m_voiceStreamReply = nullptr;
     QByteArray m_sseBuffer;
+    QByteArray m_voiceSseBuffer;
     QVariantList m_stubDigitalHumans;
 
     void initStubData();

@@ -10,6 +10,7 @@
 #include "src/settingsmanager.h"
 #include "src/voiceinterface.h"
 #include "src/digitalhumanmanager.h"
+#include "src/audioplayer.h"
 
 int main(int argc, char *argv[])
 {
@@ -24,6 +25,7 @@ int main(int argc, char *argv[])
     SettingsManager settingsManager;
     VoiceInterface voiceInterface;
     DigitalHumanManager digitalHumanManager;
+    AudioPlayer audioPlayer;
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("loginManager", &loginManager);
@@ -32,6 +34,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("settingsManager", &settingsManager);
     engine.rootContext()->setContextProperty("voiceInterface", &voiceInterface);
     engine.rootContext()->setContextProperty("digitalHumanManager", &digitalHumanManager);
+    engine.rootContext()->setContextProperty("audioPlayer", &audioPlayer);
 
     QObject::connect(
         &engine,

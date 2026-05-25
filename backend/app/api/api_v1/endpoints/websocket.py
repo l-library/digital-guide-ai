@@ -1,13 +1,18 @@
 import json
+import os
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.rag_service import retrieve_context, build_prompt
 from app.services.llm_service import generate_stream_async, generate_title_async
+from app.services.tts_service import synthesize_to_file
 from app.models import Conversation, Message
 from app.database import SessionLocal
 from sqlalchemy import func
 
 router = APIRouter()
+
+TEMP_AUDIO_DIR = os.path.abspath(os.path.join("data", "temp_audios"))
+os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
 
 
 @router.websocket("/ws/chat")
@@ -33,6 +38,7 @@ async def websocket_chat(ws: WebSocket):
 
             conversation_id = data.get("conversation_id", 0)
             content = data.get("content", "")
+            response_type = data.get("response_type", 0)
 
             if not content.strip():
                 await send_json(
@@ -135,10 +141,24 @@ async def websocket_chat(ws: WebSocket):
                     db.close()
                     continue
 
+                audio_url = None
+                if response_type == 1:
+                    try:
+                        audio_filename = await synthesize_to_file(
+                            full_content, TEMP_AUDIO_DIR
+                        )
+                        if audio_filename:
+                            audio_url = (
+                                f"/api/v1/download_audio?filename={audio_filename}"
+                            )
+                    except Exception as e:
+                        print(f"[TTS失败] {e}")
+
                 assistant_msg = Message(
                     conversation_id=conversation_id,
                     role="assistant",
                     content=full_content,
+                    audio_url=audio_url,
                 )
                 db.add(assistant_msg)
                 conv.updated_at = datetime.utcnow()
@@ -155,7 +175,7 @@ async def websocket_chat(ws: WebSocket):
                         "conversation_id": conversation_id,
                         "message_id": assistant_msg.id,
                         "full_content": full_content,
-                        "audio_url": None,
+                        "audio_url": audio_url,
                         "knowledge_sources": knowledge_sources,
                     }
                 )

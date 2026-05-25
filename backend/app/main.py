@@ -16,6 +16,13 @@ async def lifespan(app: FastAPI):
     from app.services.rag_service import _get_stores
     _get_stores()
     print("预热完成，服务就绪。")
+
+    print("正在预热ASR服务，加载Whisper模型...")
+    from app.services.asr_service import _get_model
+    import asyncio
+    await asyncio.to_thread(_get_model)
+    print("ASR服务就绪。")
+
     yield
     print("服务关闭。")
 
