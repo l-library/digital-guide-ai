@@ -6,8 +6,8 @@ from app.models import KnowledgeDoc
 from app.services.knowledge_service import (
     save_uploaded_file, 
     process_document, 
-    embeddings,          # 导入全局模型
-    VECTOR_STORE_DIR     # 导入全局向量库路径
+    _get_embeddings,
+    VECTOR_STORE_DIR
 )
 
 router = APIRouter()
@@ -65,7 +65,7 @@ async def trigger_process_doc(
 
 import os
 from langchain_chroma import Chroma
-from app.services.knowledge_service import VECTOR_STORE_DIR, embeddings
+from app.services.knowledge_service import VECTOR_STORE_DIR, _get_embeddings
 
 @router.delete("/knowledge-docs/{doc_id}")
 def delete_knowledge_doc(doc_id: int, db: Session = Depends(get_db)):
@@ -89,7 +89,7 @@ def delete_knowledge_doc(doc_id: int, db: Session = Depends(get_db)):
             vectorstore = Chroma(
                 collection_name="lingshan_knowledge",
                 persist_directory=VECTOR_STORE_DIR,
-                embedding_function=embeddings 
+                embedding_function=_get_embeddings()
             )
             # 通过 where 过滤条件，只删除 metadata 中 doc_id 匹配的块
             vectorstore.delete(where={"doc_id": str(doc_id)})

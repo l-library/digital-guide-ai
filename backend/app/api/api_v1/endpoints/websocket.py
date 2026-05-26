@@ -70,17 +70,20 @@ async def _tts_player(conversation_id: int, queue: asyncio.Queue):
         _tts_queues.pop(conversation_id, None)
 
 
-async def _enqueue_tts(conversation_id: int, text: str, queue: asyncio.Queue):
-    """合成 TTS 并按 LLM 生成顺序入队；合成可并发，播报严格保序"""
-    loop = asyncio.get_event_loop()
-    future = loop.create_future()
-    await queue.put(future)
+async def _synthesize_and_resolve(text: str, future: asyncio.Future):
     try:
         audio_filename = await synthesize_to_file(text, TEMP_AUDIO_DIR)
         future.set_result(audio_filename if audio_filename else None)
     except Exception as e:
-        print(f"[逐句TTS合成失败] conv={conversation_id}: {e}")
+        print(f"[逐句TTS合成失败]: {e}")
         future.set_result(None)
+
+
+def _enqueue_tts_sync(text: str, queue: asyncio.Queue) -> asyncio.Future:
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    queue.put_nowait(future)
+    return future
 
 
 @router.websocket("/ws/chat")
@@ -206,9 +209,8 @@ async def websocket_chat(ws: WebSocket):
                                     }
                                 )
                                 if response_type == 1:
-                                    asyncio.create_task(
-                                        _enqueue_tts(conversation_id, s, queue)
-                                    )
+                                    future = _enqueue_tts_sync(s, queue)
+                                    asyncio.create_task(_synthesize_and_resolve(s, future))
                             sentence_buffer = ""
                         await send_json(
                             {
@@ -227,9 +229,8 @@ async def websocket_chat(ws: WebSocket):
                             }
                         )
                         if response_type == 1:
-                            asyncio.create_task(
-                                _enqueue_tts(conversation_id, remaining, queue)
-                            )
+                            future = _enqueue_tts_sync(remaining, queue)
+                            asyncio.create_task(_synthesize_and_resolve(remaining, future))
                     if response_type == 1:
                         await queue.put(None)
                 except Exception as gen_err:

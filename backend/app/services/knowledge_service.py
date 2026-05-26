@@ -17,21 +17,23 @@ DATA_DIR = os.path.join(BACKEND_DIR, "data", "knowledge_docs")
 MODEL_PATH = os.path.join(BACKEND_DIR, "models", "bge-small-zh-v1.5")
 VECTOR_STORE_DIR = os.path.join(BACKEND_DIR, "vector_store", "lingshan")
 
-# 本地 Embedding 模型路径和 Chroma 数据库路径
-MODEL_PATH = os.path.join(BACKEND_DIR, "models", "bge-small-zh-v1.5")
-VECTOR_STORE_DIR = os.path.join(BACKEND_DIR, "vector_store", "lingshan")
-
 os.makedirs(DATA_DIR, exist_ok=True)
-# 确保专门存知识库文档的文件夹存在
 
-# 在这里定义全局变量，让它在模块加载时就初始化好
-print("[Global] 正在初始化全局 BGE Embedding 模型...")
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-embeddings = HuggingFaceEmbeddings(
-    model_name=MODEL_PATH,
-    model_kwargs={'device': DEVICE}
-)
-print(f"[Global] 全局 Embedding 模型初始化成功，使用设备: {DEVICE}")
+# 懒加载 embedding 模型，避免模块导入时立即初始化（与 RAG 服务的 embedding 模型隔离）
+_embeddings = None
+
+
+def _get_embeddings() -> HuggingFaceEmbeddings:
+    global _embeddings
+    if _embeddings is None:
+        print("[Knowledge] 正在初始化 BGE Embedding 模型...")
+        DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+        _embeddings = HuggingFaceEmbeddings(
+            model_name=MODEL_PATH,
+            model_kwargs={'device': DEVICE}
+        )
+        print(f"[Knowledge] Embedding 模型初始化成功，使用设备: {DEVICE}")
+    return _embeddings
 
 async def save_uploaded_file(db: Session, file: UploadFile, title: str, user_id: int) -> KnowledgeDoc:
     """
@@ -115,7 +117,7 @@ def process_document(db: Session, doc_id: int):
         # 连接并实例化 Chroma 数据库
         vectorstore = Chroma(
             collection_name="lingshan_knowledge", 
-            embedding_function=embeddings,
+            embedding_function=_get_embeddings(),
             persist_directory=VECTOR_STORE_DIR
         )
         

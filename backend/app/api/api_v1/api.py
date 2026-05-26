@@ -1,7 +1,5 @@
 from fastapi import APIRouter
-from .endpoints import chat, conversations, digital_human
-from app.api.api_v1.endpoints import chat, conversations, admin
-from .endpoints import chat, conversations
+from .endpoints import chat, conversations, digital_human, admin
 
 api_router = APIRouter()
 api_router.include_router(chat.router, tags=["游客交互"])
