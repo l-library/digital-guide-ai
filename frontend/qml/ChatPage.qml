@@ -21,6 +21,9 @@ Page {
         if (conversationManager) {
             conversationManager.setResponseType(root.outputMode === "digitHuman" ? 1 : 0)
         }
+        if (liveTalkingClient && conversationManager) {
+            liveTalkingClient.conversationId = conversationManager.currentConversationId
+        }
     }
 
     onOutputModeChanged: {
@@ -613,42 +616,6 @@ Page {
                 }
             }
 
-            // AI回复文本 - 底部半透明浮层，叠加在视频上方
-            Rectangle {
-                id: aiResponseBox
-                anchors.bottom: bottomStatusBar.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                anchors.bottomMargin: 4
-                height: Math.min(aiResponseText.implicitHeight + 24, parent.height * 0.35)
-                color: "#CC000000"
-                radius: 10
-                visible: root.outputMode === "digitHuman" && conversationManager && conversationManager.messages.length > 0
-                         && aiResponseText.text !== ""
-
-                ScrollView {
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    clip: true
-
-                    Text {
-                        id: aiResponseText
-                        text: {
-                            if (!conversationManager || !conversationManager.messages.length)
-                                return ""
-                            var lastMsg = conversationManager.messages[conversationManager.messages.length - 1]
-                            if (lastMsg && (lastMsg.role === "ai" || lastMsg.role === "assistant"))
-                                return lastMsg.content
-                            return ""
-                        }
-                        font.pixelSize: 14
-                        color: "#E0E0E0"
-                        wrapMode: Text.WordWrap
-                    }
-                }
-            }
         }
 
         Rectangle {
@@ -706,9 +673,6 @@ Page {
                             if (conversationManager) {
                                 conversationManager.setResponseType(root.outputMode === "digitHuman" ? 1 : 0)
                                 conversationManager.sendMessage(inputField.text)
-                                if (root.outputMode === "digitHuman" && liveTalkingClient && liveTalkingClient.connected) {
-                                    liveTalkingClient.sendText(inputField.text)
-                                }
                                 inputField.text = ""
                             }
                         }
@@ -767,6 +731,11 @@ Button {
         function onMessageSending() {
             Qt.callLater(() => messageList.positionViewAtEnd())
         }
+        function onCurrentConversationChanged() {
+            if (liveTalkingClient && conversationManager) {
+                liveTalkingClient.conversationId = conversationManager.currentConversationId
+            }
+        }
         function onMessagesChanged() {
             if (voiceRequestInFlight) {
                 voiceRequestInFlight = false
@@ -790,14 +759,21 @@ Button {
         }
         function onCurrentAudioUrlChanged() {
             var url = conversationManager.currentAudioUrl
-            if (url && root.outputMode === "digitHuman" && audioPlayer) {
-                root.ttsStatus = "synthesizing"
+            if (url && audioPlayer) {
+                if (root.outputMode === "digitHuman" && liveTalkingClient
+                    && liveTalkingClient.connected && liveTalkingClient.sessionId !== "") {
+                    return
+                }
                 audioPlayer.play(url)
             }
         }
         function onTtsPendingChanged() {
             if (conversationManager.ttsPending) {
-                root.ttsStatus = "synthesizing"
+                if (root.outputMode === "digitHuman" && liveTalkingClient && liveTalkingClient.connected) {
+                    root.ttsStatus = "ready"
+                } else {
+                    root.ttsStatus = "synthesizing"
+                }
             }
         }
         function onStreamingAiResponseChanged() {
@@ -819,6 +795,18 @@ Button {
         }
         function onPlaybackFinished() {
             root.ttsStatus = ""
+        }
+    }
+
+    Connections {
+        target: liveTalkingClient
+        enabled: liveTalkingClient !== null && root.outputMode === "digitHuman"
+        function onSpeakingChanged() {
+            if (liveTalkingClient && liveTalkingClient.speaking) {
+                root.ttsStatus = "ready"
+            } else {
+                root.ttsStatus = ""
+            }
         }
     }
 

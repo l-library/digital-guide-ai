@@ -1,4 +1,5 @@
 #include "livetalkingclient.h"
+#include "apiservice.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -6,6 +7,7 @@
 #include <QDebug>
 #include <QMutexLocker>
 #include <QRegularExpression>
+#include <QDateTime>
 
 LiveTalkingImageProvider::LiveTalkingImageProvider(LiveTalkingClient *client)
     : QQuickImageProvider(QQuickImageProvider::Image)
@@ -23,13 +25,6 @@ QImage LiveTalkingImageProvider::requestImage(const QString &id, QSize *size, co
             *size = placeholder.size();
         return placeholder;
     }
-    static int provCount = 0;
-    provCount++;
-    if (provCount % 50 == 1) {
-        qDebug() << "LiveTalkingImageProvider: serving frame" << m_client->frameCount()
-                 << "size:" << frame.width() << "x" << frame.height()
-                 << "id:" << id;
-    }
     if (size) {
         *size = frame.size();
     }
@@ -45,6 +40,11 @@ LiveTalkingClient::LiveTalkingClient(QObject *parent)
     m_audioFormat.setSampleRate(16000);
     m_audioFormat.setChannelCount(1);
     m_audioFormat.setSampleFormat(QAudioFormat::Int16);
+
+    m_displayTimer = new QTimer(this);
+    m_displayTimer->setInterval(10);
+    m_lastDisplayTime = 0;
+    connect(m_displayTimer, &QTimer::timeout, this, &LiveTalkingClient::onDisplayTimerTick);
 }
 
 LiveTalkingClient::~LiveTalkingClient()
@@ -90,6 +90,22 @@ QImage LiveTalkingClient::currentFrame() const
 QString LiveTalkingClient::sessionId() const
 {
     return m_sessionId;
+}
+
+int LiveTalkingClient::conversationId() const
+{
+    return m_conversationId;
+}
+
+void LiveTalkingClient::setConversationId(int id)
+{
+    if (m_conversationId != id) {
+        m_conversationId = id;
+        emit conversationIdChanged();
+        if (id > 0 && !m_sessionId.isEmpty() && m_connected) {
+            ApiService::instance().registerLiveTalkingSession(id, m_sessionId);
+        }
+    }
 }
 
 void LiveTalkingClient::connectToServer(const QString &host, int port)
@@ -174,6 +190,10 @@ void LiveTalkingClient::onDisconnected()
     qDebug() << "LiveTalking: WebSocket disconnected";
     m_connected = false;
     m_speaking = false;
+    m_videoFrameBuffer.clear();
+    if (m_displayTimer) {
+        m_displayTimer->stop();
+    }
     {
         QMutexLocker locker(&m_frameMutex);
         m_currentFrame = QImage();
@@ -193,13 +213,6 @@ void LiveTalkingClient::onBinaryMessageReceived(const QByteArray &data)
     if (data.size() < 2) {
         return;
     }
-    static int binaryCount = 0;
-    binaryCount++;
-    if (binaryCount <= 5 || binaryCount % 100 == 0) {
-        qDebug() << "LiveTalking: binary message received, size:" << data.size()
-                 << "type:" << Qt::hex << (unsigned char)data[0]
-                 << "count:" << binaryCount;
-    }
 
     unsigned char frameType = static_cast<unsigned char>(data[0]);
     if (frameType == 0x01) {
@@ -211,7 +224,6 @@ void LiveTalkingClient::onBinaryMessageReceived(const QByteArray &data)
 
 void LiveTalkingClient::onTextMessageReceived(const QString &message)
 {
-    qDebug() << "LiveTalking: text message received:" << message.left(200);
     QJsonDocument doc = QJsonDocument::fromJson(message.toUtf8());
     if (!doc.isObject()) {
         return;
@@ -223,10 +235,18 @@ void LiveTalkingClient::onTextMessageReceived(const QString &message)
         m_sessionId = obj["sessionid"].toString();
         qDebug() << "LiveTalking: session created:" << m_sessionId;
         emit sessionChanged();
+        emit sessionCreated(m_sessionId);
+        if (m_conversationId > 0 && !m_sessionId.isEmpty()) {
+            ApiService::instance().registerLiveTalkingSession(m_conversationId, m_sessionId);
+        }
     } else if (type == "bound") {
         m_sessionId = obj["sessionid"].toString();
         qDebug() << "LiveTalking: session bound:" << m_sessionId;
         emit sessionChanged();
+        emit sessionCreated(m_sessionId);
+        if (m_conversationId > 0 && !m_sessionId.isEmpty()) {
+            ApiService::instance().registerLiveTalkingSession(m_conversationId, m_sessionId);
+        }
     } else if (type == "text_ack") {
         qDebug() << "LiveTalking: text acknowledged";
     } else if (type == "interrupt_ack") {
@@ -254,35 +274,52 @@ void LiveTalkingClient::processVideoFrame(const QByteArray &payload)
     }
 
     QByteArray jpegData = payload.mid(4);
-    QImage frame;
-    if (frame.loadFromData(jpegData, "JPEG")) {
-        bool sizeChanged = false;
-        {
-            QMutexLocker locker(&m_frameMutex);
-            m_currentFrame = frame;
-            m_frameCount++;
-            if (m_frameWidth != frame.width() || m_frameHeight != frame.height()) {
+
+    m_videoFrameBuffer.append(jpegData);
+    if (m_videoFrameBuffer.size() > 200) {
+        m_videoFrameBuffer.erase(m_videoFrameBuffer.begin(),
+            m_videoFrameBuffer.begin() + m_videoFrameBuffer.size() - 100);
+    }
+    if (!m_displayTimer->isActive()) {
+        m_displayTimer->start();
+    }
+}
+
+void LiveTalkingClient::onDisplayTimerTick()
+{
+    if (m_videoFrameBuffer.isEmpty()) {
+        return;
+    }
+
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    qint64 elapsed = m_lastDisplayTime > 0 ? now - m_lastDisplayTime : 40;
+
+    if (elapsed < 40) {
+        return;
+    }
+
+    int framesToShow = qMin((int)(elapsed / 40), m_videoFrameBuffer.size());
+
+    for (int i = 0; i < framesToShow; i++) {
+        QByteArray jpegData = m_videoFrameBuffer.takeFirst();
+
+        if (i == framesToShow - 1) {
+            QImage frame;
+            if (frame.loadFromData(jpegData, "JPEG")) {
+                QMutexLocker locker(&m_frameMutex);
+                m_frameCount++;
+                bool sizeChanged = (m_frameWidth != frame.width() || m_frameHeight != frame.height());
                 m_frameWidth = frame.width();
                 m_frameHeight = frame.height();
-                sizeChanged = true;
+                m_currentFrame = frame;
+                if (sizeChanged) {
+                    emit frameSizeChanged();
+                }
             }
-        }
-        if (sizeChanged) {
-            emit frameSizeChanged();
-        }
-        if (m_frameCount % 50 == 1 || sizeChanged) {
-            qDebug() << "LiveTalking: video frame #" << m_frameCount
-                     << "size:" << frame.width() << "x" << frame.height();
-        }
-        emit frameUpdated();
-    } else {
-        static int failCount = 0;
-        failCount++;
-        if (failCount <= 3) {
-            qWarning() << "LiveTalking: failed to decode JPEG frame, payload size:" << payload.size()
-                       << "jpeg size:" << jpegData.size();
+            emit frameUpdated();
         }
     }
+    m_lastDisplayTime = now;
 }
 
 void LiveTalkingClient::processAudioFrame(const QByteArray &payload)
@@ -297,6 +334,7 @@ void LiveTalkingClient::processAudioFrame(const QByteArray &payload)
     if (eventpointCode == 1) {
         if (!m_speaking) {
             m_speaking = true;
+            m_videoFrameBuffer.clear();
             emit speakingChanged();
         }
     } else if (eventpointCode == 2) {
@@ -315,7 +353,15 @@ void LiveTalkingClient::processAudioFrame(const QByteArray &payload)
     }
 
     if (m_audioDevice) {
-        m_audioDevice->write(pcmData);
+        qint64 written = m_audioDevice->write(pcmData);
+        if (written != pcmData.size()) {
+            static int partialCount = 0;
+            partialCount++;
+            if (partialCount <= 5 || partialCount % 50 == 0) {
+                qWarning() << "[音频] 部分写入! 期望:" << pcmData.size()
+                           << "实际:" << written << "累计:" << partialCount;
+            }
+        }
     }
 }
 
@@ -323,6 +369,7 @@ void LiveTalkingClient::setupAudio()
 {
     m_audioSink = new QAudioSink(m_audioFormat, this);
     m_audioSink->setVolume(1.0);
+    m_audioSink->setBufferSize(16000 * 2 * 1);  // 500ms buffer @ 16kHz int16 mono = 16000 samples
     m_audioDevice = m_audioSink->start();
     if (!m_audioDevice) {
         qWarning() << "LiveTalking: failed to start audio sink";

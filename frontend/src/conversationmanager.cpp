@@ -60,6 +60,12 @@ ConversationManager::ConversationManager(QObject *parent)
             return;
         updateLastAiMessageContent(token);
     });
+    connect(&api, &ApiService::wsSentenceReceived, this, [this](int conversationId, const QString &sentence) {
+        if (conversationId != m_currentConversationId)
+            return;
+        m_currentSentence = sentence;
+        emit currentSentenceChanged();
+    });
     connect(&api, &ApiService::wsDoneReceived, this, [this](int conversationId, int, const QString &, const QString &audioUrl) {
         if (conversationId != m_currentConversationId)
             return;
@@ -69,6 +75,7 @@ ConversationManager::ConversationManager(QObject *parent)
             setCurrentAudioUrl(audioUrl);
         }
         setTtsPending(false);
+        // 不清除 currentSentence，让字幕在数字人播报期间持续显示
         emit messagesChanged();
         if (m_currentUserId > 0) {
             loadConversationList(m_currentUserId);
@@ -89,7 +96,7 @@ ConversationManager::ConversationManager(QObject *parent)
             return;
         updateLastAiMessageContent(token);
     });
-connect(&api, &ApiService::voiceDoneReceived, this, [this](int conversationId, int, const QString &, const QString &audioUrl) {
+    connect(&api, &ApiService::voiceDoneReceived, this, [this](int conversationId, int, const QString &, const QString &audioUrl) {
         if (conversationId != m_currentConversationId)
             return;
         m_streaming = false;
@@ -98,6 +105,7 @@ connect(&api, &ApiService::voiceDoneReceived, this, [this](int conversationId, i
             setCurrentAudioUrl(audioUrl);
         }
         setTtsPending(false);
+        // 不清除 currentSentence，让字幕在数字人播报期间持续显示
         emit messagesChanged();
         if (m_currentUserId > 0) {
             loadConversationList(m_currentUserId);
@@ -208,6 +216,7 @@ void ConversationManager::loadConversation(int conversationId)
     m_currentAudioUrl.clear();
     m_ttsPending = false;
     m_streaming = false;
+    m_currentSentence.clear();
     emit messagesChanged();
     emit streamingAiResponseChanged();
     emit currentAudioUrlChanged();
@@ -251,11 +260,13 @@ void ConversationManager::clearCurrentConversation()
     m_pendingVoiceFilePath.clear();
     m_currentAudioUrl.clear();
     m_ttsPending = false;
+    m_currentSentence.clear();
     emit streamingAiResponseChanged();
     emit currentConversationChanged();
     emit messagesChanged();
     emit currentAudioUrlChanged();
     emit ttsPendingChanged();
+    emit currentSentenceChanged();
 }
 
 void ConversationManager::loadConversationList(int userId)
@@ -297,8 +308,10 @@ void ConversationManager::appendMessage(const QString &role, const QString &cont
     if (role == "user") {
         m_currentAudioUrl.clear();
         m_ttsPending = false;
+        m_currentSentence.clear();
         emit currentAudioUrlChanged();
         emit ttsPendingChanged();
+        emit currentSentenceChanged();
     }
     QVariantMap msg;
     msg["id"] = 0;
@@ -339,6 +352,11 @@ QString ConversationManager::currentAudioUrl() const
 bool ConversationManager::ttsPending() const
 {
     return m_ttsPending;
+}
+
+QString ConversationManager::currentSentence() const
+{
+    return m_currentSentence;
 }
 
 void ConversationManager::setResponseType(int type)

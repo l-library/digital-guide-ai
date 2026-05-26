@@ -382,8 +382,10 @@ class BaseAvatar:
             _last_speaking_frame = None  # 说话帧缓存
 
         self.output.start()
+        frame_interval = 1.0 / self.opt.fps  # 25fps → 40ms
         
         while not quit_event.is_set():
+            t_start = time.perf_counter()
             try:
                 audio_frames: list[AudioFrameData]
                 res_frame,audio_frames,idx = self.res_frame_queue.get(block=True, timeout=1)
@@ -450,6 +452,11 @@ class BaseAvatar:
                 # 使用统一输出接口推送音频帧
                 self.output.push_audio_frame(frame, audio_frame.userdata)
                 self.record_audio_data(frame)
+
+            # 帧率限速：每个 process_frames 迭代 = 1 视频帧 + 2 音频帧 = 40ms @ 25fps
+            elapsed = time.perf_counter() - t_start
+            if elapsed < frame_interval:
+                time.sleep(frame_interval - elapsed)
                 
             # if self.opt.transport == 'virtualcam' and hasattr(self.output, '_cam') and self.output._cam:
             #     self.output._cam.sleep_until_next_frame()
@@ -480,7 +487,7 @@ class BaseAvatar:
             self.asr.run_step()
 
             buffer_size = self.output.get_buffer_size() if hasattr(self.output, 'get_buffer_size') else 0
-            if buffer_size >= 5:
+            if buffer_size >= 300:
                 logger.debug('sleep qsize=%d', buffer_size)
                 time.sleep(0.04 * buffer_size * 0.8)
         logger.info('baseavatar render thread stop')

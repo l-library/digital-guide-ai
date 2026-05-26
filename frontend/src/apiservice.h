@@ -119,6 +119,7 @@ public:
     // Digital humans
     void loadDigitalHumans();
     void setDefaultDigitalHuman(int dhId);
+    void registerLiveTalkingSession(int conversationId, const QString &sessionId);
 
     // Settings
     void getSetting(const QString &key);
@@ -148,6 +149,7 @@ signals:
     void wsConnected();
     void wsDisconnected();
     void wsTokenReceived(int conversationId, const QString &token);
+    void wsSentenceReceived(int conversationId, const QString &sentence);
     void wsDoneReceived(int conversationId, int messageId, const QString &fullContent, const QString &audioUrl);
     void wsError(const QString &message);
 

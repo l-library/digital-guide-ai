@@ -29,12 +29,16 @@ class WebSocketStreamOutput(BaseOutput):
         self._running = False
         self._jpeg_quality = 75
         self._frame_count = 0
+        self._send_queue: Optional[asyncio.Queue] = None
+        self._sender_task: Optional[asyncio.Task] = None
 
     def set_websocket(self, ws):
         """设置 WebSocket 连接（由路由层在 asyncio 上下文中调用）"""
         self._ws = ws
         self._running = ws is not None
         self._loop = asyncio.get_running_loop()
+        self._send_queue = asyncio.Queue(maxsize=500)
+        self._sender_task = asyncio.ensure_future(self._sender_loop(), loop=self._loop)
         logger.info(f"WebSocketStreamOutput: WebSocket 已设置, running={self._running}")
 
     def start(self) -> None:
@@ -42,9 +46,24 @@ class WebSocketStreamOutput(BaseOutput):
         self._running = True
         logger.info("WebSocketStreamOutput: 启动")
 
+    async def _sender_loop(self) -> None:
+        """逐帧发送，每次 send 后让出事件循环，消除突发洪峰"""
+        while self._running:
+            try:
+                payload = await asyncio.wait_for(self._send_queue.get(), timeout=1.0)
+                if self._ws is not None and not self._ws.closed:
+                    await self._ws.send_bytes(payload)
+                self._send_queue.task_done()
+                await asyncio.sleep(0)  # 让出事件循环，防止连续发送形成突发
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                logger.error(f"WebSocket sender_loop 错误: {e}")
+                break
+
     def push_video_frame(self, frame) -> None:
         """
-        推送视频帧 — 将 BGR24 numpy 数组编码为 JPEG 并通过 WebSocket 发送。
+        推送视频帧 — 将 BGR24 numpy 数组编码为 JPEG 并入队发送。
 
         帧格式: 二进制帧，前4字节为类型标识 (0x01 = video)，
                 后4字节为帧序号，其余为 JPEG 数据。
@@ -62,16 +81,18 @@ class WebSocketStreamOutput(BaseOutput):
             self._frame_count += 1
             payload = header + jpeg_data.tobytes()
 
-            self._loop.call_soon_threadsafe(
-                lambda p=payload: asyncio.ensure_future(self._send_binary(p), loop=self._loop)
-            )
+            # 入队而非直接发送，满则丢弃（背压）
+            try:
+                self._send_queue.put_nowait(payload)
+            except asyncio.QueueFull:
+                pass
 
         except Exception as e:
             logger.error(f"WebSocketStreamOutput push_video_frame 错误: {e}")
 
     def push_audio_frame(self, frame, eventpoint=None) -> None:
         """
-        推送音频帧 — 将 int16 PCM 数据通过 WebSocket 发送。
+        推送音频帧 — 将 int16 PCM 数据入队发送。
 
         帧格式: 二进制帧，前4字节为类型标识 (0x02 = audio)，
                 后1字节为 eventpoint 类型，其余为 PCM 数据。
@@ -91,27 +112,25 @@ class WebSocketStreamOutput(BaseOutput):
             header = b'\x02' + ep_code.to_bytes(1, byteorder='big')
             payload = header + frame.tobytes()
 
-            self._loop.call_soon_threadsafe(
-                lambda p=payload: asyncio.ensure_future(self._send_binary(p), loop=self._loop)
-            )
+            # 入队而非直接发送，满则丢弃（背压）
+            try:
+                self._send_queue.put_nowait(payload)
+            except asyncio.QueueFull:
+                pass
 
         except Exception as e:
             logger.error(f"WebSocketStreamOutput push_audio_frame 错误: {e}")
 
-    async def _send_binary(self, payload: bytes) -> None:
-        """异步发送二进制数据到 WebSocket"""
-        if self._ws is not None and not self._ws.closed:
-            try:
-                await self._ws.send_bytes(payload)
-            except Exception as e:
-                logger.error(f"WebSocket 发送错误: {e}")
-                self._running = False
-
     def get_buffer_size(self) -> int:
-        """WebSocket 输出无缓冲队列"""
+        """返回发送队列中的积压帧数，用于引擎降速限流"""
+        if self._send_queue is not None:
+            return self._send_queue.qsize()
         return 0
 
     def stop(self) -> None:
         """停止输出"""
         self._running = False
+        if self._sender_task is not None:
+            self._sender_task.cancel()
+            self._sender_task = None
         logger.info("WebSocketStreamOutput: 停止")

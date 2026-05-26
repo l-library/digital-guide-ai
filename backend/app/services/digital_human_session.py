@@ -39,6 +39,12 @@ def get_session_id(conversation_id: int) -> str | None:
     return _sessions.get(conversation_id)
 
 
+def register_session(conversation_id: int, sessionid: str):
+    """将前端已创建的 LiveTalking sessionid 注册到映射中"""
+    _sessions[conversation_id] = sessionid
+    logger.info("conversation_id=%d 注册到 sessionid=%s", conversation_id, sessionid)
+
+
 async def destroy_session(conversation_id: int) -> bool:
     """销毁 conversation_id 对应的 LiveTalking 会话并移除映射。成功返回 True，无映射返回 False。"""
     sessionid = _sessions.pop(conversation_id, None)

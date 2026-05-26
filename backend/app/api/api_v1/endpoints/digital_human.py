@@ -9,6 +9,7 @@ from app.services.digital_human_session import (
     create_digital_human_session,
     destroy_session,
     get_session_id,
+    register_session,
 )
 
 router = APIRouter()
@@ -17,6 +18,11 @@ router = APIRouter()
 class CreateSessionRequest(BaseModel):
     conversation_id: int
     avatar: str | None = None
+
+
+class RegisterSessionRequest(BaseModel):
+    conversation_id: int
+    session_id: str
 
 
 class SpeakRequest(BaseModel):
@@ -53,6 +59,13 @@ async def delete_session(conversation_id: int):
         return {"code": 500, "message": "数字人服务连接失败"}
     if not destroyed:
         return {"code": 404, "message": "会话不存在"}
+    return {"code": 200, "message": "success"}
+
+
+@router.post("/register_session")
+async def register_session_endpoint(req: RegisterSessionRequest):
+    """注册前端已创建的 LiveTalking sessionid 到 conversation_id 映射"""
+    register_session(req.conversation_id, req.session_id)
     return {"code": 200, "message": "success"}
 
 
