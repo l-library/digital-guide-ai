@@ -19,7 +19,7 @@ def _get_model():
     """懒加载 Whisper 模型，避免模块导入时阻塞"""
     global _model
     if _model is None:
-        print("[ASR] 正在加载 Whisper Medium 模型，首次加载可能需要较长时间...")
+        print("[ASR] 正在加载 Whisper Base 模型，首次加载可能需要较长时间...")
         _model = whisper.load_model("base", device=_device, download_root=_models_dir)
         print("[ASR] Whisper 模型加载完成")
     return _model

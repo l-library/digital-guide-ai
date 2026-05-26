@@ -50,3 +50,43 @@ class Message(Base):
             "knowledge_sources": self.knowledge_sources,
             "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
         }
+
+class KnowledgeDoc(Base):
+    """知识文档表"""
+    __tablename__ = "knowledge_docs"
+
+    # 对应 API 里的 doc_id
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    
+    # 业务字段
+    title = Column(String(255), nullable=False)
+    file_type = Column(String(32), nullable=False)       # 例如docx, pdf
+    file_size = Column(Integer, nullable=False, default=0) # 文件大小(字节)
+    
+    file_path = Column(String(512), nullable=False)      
+    
+    # 状态与统计 (uploaded, processing, ready, failed)
+    status = Column(String(32), nullable=False, default="uploaded")
+    chunk_count = Column(Integer, nullable=False, default=0)
+    content_preview = Column(Text, nullable=True)        # 提取后的一小段文本预览
+    
+    # 关联信息
+    user_id = Column(Integer, nullable=False, index=True) # 哪个管理员上传的
+    
+    # 时间戳
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        """将模型对象转换为 API 规范要求的 JSON 字典格式"""
+        return {
+            "doc_id": self.id,  # 这里数据库叫 id，API 叫 doc_id
+            "title": self.title,
+            "file_type": self.file_type,
+            "file_size": self.file_size,
+            "status": self.status,
+            "chunk_count": self.chunk_count,
+            "content_preview": self.content_preview,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() + "Z" if self.updated_at else None,
+        }
