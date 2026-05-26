@@ -27,6 +27,7 @@ qt_add_executable(appdigital_guide_ai
     src/voiceinterface.cpp
     src/digitalhumanmanager.cpp
     src/audioplayer.cpp
+    src/livetalkingclient.cpp
     res.qrc
 )
 
@@ -40,8 +41,9 @@ qt_add_qml_module(appdigital_guide_ai
         qml/HistoryPage.qml
         qml/SettingsPage.qml
         qml/components/MessageBubble.qml
+        qml/components/DigitalHumanView.qml
 
-        SOURCES src/apiservice.cpp src/apiservice.h src/conversationmanager.cpp src/conversationmanager.h src/digitalhumanmanager.cpp src/digitalhumanmanager.h src/historymanager.cpp src/historymanager.h src/loginmanager.cpp src/loginmanager.h src/settingsmanager.cpp src/settingsmanager.h src/voiceinterface.cpp src/voiceinterface.h src/audioplayer.cpp src/audioplayer.h
+        SOURCES src/apiservice.cpp src/apiservice.h src/conversationmanager.cpp src/conversationmanager.h src/digitalhumanmanager.cpp src/digitalhumanmanager.h src/historymanager.cpp src/historymanager.h src/loginmanager.cpp src/loginmanager.h src/settingsmanager.cpp src/settingsmanager.h src/voiceinterface.cpp src/voiceinterface.h src/audioplayer.cpp src/audioplayer.h src/livetalkingclient.cpp src/livetalkingclient.h
         QML_FILES
 )
 

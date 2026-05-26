@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import os
+import re
 import time
 import json
 import asyncio
@@ -16,6 +17,8 @@ from app.services.llm_service import (
 )
 from app.services.asr_service import transcribe_audio
 from app.services.tts_service import synthesize_to_file
+from app.services.digital_human_client import get_client as get_dh_client
+from app.services.digital_human_session import get_session_id
 from app.database import get_db, SessionLocal
 from app.models import Conversation, Message
 from sqlalchemy import func
@@ -24,6 +27,70 @@ router = APIRouter()
 
 TEMP_AUDIO_DIR = os.path.abspath(os.path.join("data", "temp_audios"))
 os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
+
+
+async def _send_audio_to_livetalking(conversation_id: int, audio_filename: str):
+    """将 TTS 生成的音频文件发送给 LiveTalking，驱动口型动画"""
+    sessionid = get_session_id(conversation_id)
+    if sessionid is None:
+        return
+    filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
+    if not os.path.exists(filepath):
+        return
+    try:
+        with open(filepath, "rb") as f:
+            audio_bytes = f.read()
+        await get_dh_client().send_audio(sessionid, audio_bytes)
+    except Exception as e:
+        print(f"[LiveTalking音频推送失败] conversation_id={conversation_id}: {e}")
+
+
+def _split_sentences(text: str) -> list[str]:
+    """按中文句号/感叹号/问号/换行拆分句子，过滤空串"""
+    return [s for s in re.split(r'[。！？\n]+', text) if s.strip()]
+
+
+# TTS Future 队列：合成并发执行，但播报按 LLM 生成顺序严格串行
+_tts_queues: dict[int, asyncio.Queue] = {}
+
+
+async def _tts_player(conversation_id: int, queue: asyncio.Queue):
+    """顺序消费队列中的 TTS Future，逐句发送给 LiveTalking 播报"""
+    try:
+        while True:
+            future = await queue.get()
+            if future is None:
+                break
+            try:
+                audio_filename = await future
+                if not audio_filename:
+                    continue
+            except Exception as e:
+                print(f"[TTS合成异常] conv={conversation_id}: {e}")
+                continue
+            try:
+                await _send_audio_to_livetalking(conversation_id, audio_filename)
+                filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
+                file_size = os.path.getsize(filepath)
+                duration = file_size / 5000 + 0.3
+                await asyncio.sleep(duration)
+            except Exception as e:
+                print(f"[TTS播报失败] conv={conversation_id}: {e}")
+    finally:
+        _tts_queues.pop(conversation_id, None)
+
+
+async def _enqueue_tts(conversation_id: int, text: str, queue: asyncio.Queue):
+    """合成 TTS 并按 LLM 生成顺序入队；合成可并发，播报严格保序"""
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    await queue.put(future)
+    try:
+        audio_filename = await synthesize_to_file(text, TEMP_AUDIO_DIR)
+        future.set_result(audio_filename if audio_filename else None)
+    except Exception as e:
+        print(f"[逐句TTS合成失败] conv={conversation_id}: {e}")
+        future.set_result(None)
 
 
 class ChatTextRequest(BaseModel):
@@ -64,17 +131,48 @@ async def stream_chat(req: ChatTextRequest):
 
         async def event_generator():
             full_content = ""
+            sentence_buffer = ""
+            queue = asyncio.Queue()
+            _tts_queues[req.conversation_id] = queue
+            player_task = asyncio.create_task(_tts_player(req.conversation_id, queue))
+
             try:
                 async for token in generate_stream_async(
                     [{"role": "user", "content": prompt}]
                 ):
                     full_content += token
+                    sentence_buffer += token
                     yield f"data: {json.dumps({'type': 'token', 'content': token}, ensure_ascii=False)}\n\n"
+
+                    if sentence_buffer and sentence_buffer[-1] in "。！？\n":
+                        sentences = _split_sentences(sentence_buffer)
+                        for s in sentences:
+                            if req.response_type == 1:
+                                asyncio.create_task(
+                                    _enqueue_tts(req.conversation_id, s, queue)
+                                )
+                            yield f"data: {json.dumps({'type': 'sentence', 'conversation_id': req.conversation_id, 'content': s}, ensure_ascii=False)}\n\n"
+                        sentence_buffer = ""
+
             except Exception as e:
                 yield f"data: {json.dumps({'type': 'error', 'message': str(e)}, ensure_ascii=False)}\n\n"
+                if req.response_type == 1:
+                    await queue.put(None)
                 db.rollback()
                 db.close()
                 return
+
+            # 处理缓冲区中剩余文本
+            if sentence_buffer.strip():
+                s = sentence_buffer.strip()
+                if req.response_type == 1:
+                    asyncio.create_task(
+                        _enqueue_tts(req.conversation_id, s, queue)
+                    )
+                yield f"data: {json.dumps({'type': 'sentence', 'conversation_id': req.conversation_id, 'content': s}, ensure_ascii=False)}\n\n"
+
+            if req.response_type == 1:
+                await queue.put(None)
 
             audio_url = None
             if req.response_type == 1:
@@ -84,6 +182,7 @@ async def stream_chat(req: ChatTextRequest):
                     )
                     if audio_filename:
                         audio_url = f"/api/v1/download_audio?filename={audio_filename}"
+                        # 逐句TTS已发送音频到LiveTalking，此处仅生成audio_url供数据库存储和AudioPlayer回退
                 except Exception as e:
                     print(f"[TTS失败] {e}")
 
@@ -152,6 +251,7 @@ async def handle_text_chat_with_persistence(
             audio_filename = await synthesize_to_file(answer_text, TEMP_AUDIO_DIR)
             if audio_filename:
                 audio_url = f"/api/v1/download_audio?filename={audio_filename}"
+                await _send_audio_to_livetalking(req.conversation_id, audio_filename)
         except Exception as e:
             print(f"[TTS失败] {e}")
 
@@ -270,12 +370,18 @@ async def handle_voice_stream(
 
         async def event_generator():
             full_content = ""
+            sentence_buffer = ""
+            queue = asyncio.Queue()
+            _tts_queues[conversation_id] = queue
+            player_task = asyncio.create_task(_tts_player(conversation_id, queue))
             try:
                 user_text = await asyncio.to_thread(transcribe_audio, input_audio_path)
                 print(f"[voice_stream] 识别结果：{user_text}")
 
                 if user_text.startswith("语音识别失败:"):
                     yield f"data: {json.dumps({'type': 'error', 'conversation_id': conversation_id, 'message': user_text}, ensure_ascii=False)}\n\n"
+                    if response_type == 1:
+                        await queue.put(None)
                     db.close()
                     return
 
@@ -296,7 +402,30 @@ async def handle_voice_stream(
                     [{"role": "user", "content": prompt_text}]
                 ):
                     full_content += token
+                    sentence_buffer += token
                     yield f"data: {json.dumps({'type': 'token', 'conversation_id': conversation_id, 'content': token}, ensure_ascii=False)}\n\n"
+
+                    if sentence_buffer and sentence_buffer[-1] in "。！？\n":
+                        sentences = _split_sentences(sentence_buffer)
+                        for s in sentences:
+                            if response_type == 1:
+                                asyncio.create_task(
+                                    _enqueue_tts(conversation_id, s, queue)
+                                )
+                            yield f"data: {json.dumps({'type': 'sentence', 'conversation_id': conversation_id, 'content': s}, ensure_ascii=False)}\n\n"
+                        sentence_buffer = ""
+
+                # 处理缓冲区中剩余文本
+                if sentence_buffer.strip():
+                    s = sentence_buffer.strip()
+                    if response_type == 1:
+                        asyncio.create_task(
+                            _enqueue_tts(conversation_id, s, queue)
+                        )
+                    yield f"data: {json.dumps({'type': 'sentence', 'conversation_id': conversation_id, 'content': s}, ensure_ascii=False)}\n\n"
+
+                if response_type == 1:
+                    await queue.put(None)
 
                 audio_url = None
                 if response_type == 1:
@@ -343,6 +472,8 @@ async def handle_voice_stream(
 
             except Exception as e:
                 yield f"data: {json.dumps({'type': 'error', 'conversation_id': conversation_id, 'message': f'服务器错误: {str(e)}'}, ensure_ascii=False)}\n\n"
+                if response_type == 1:
+                    await queue.put(None)
                 db.rollback()
             finally:
                 try:

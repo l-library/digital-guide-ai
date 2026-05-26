@@ -9,10 +9,10 @@ ApplicationWindow {
     title: qsTr("数字人导游")
 
     property bool isMobile: Qt.platform.os === "android"
-    width: isMobile ? 420 : 960
-    height: isMobile ? 760 : 720
-    minimumWidth: isMobile ? 360 : 800
-    minimumHeight: isMobile ? 600 : 520
+    width: isMobile ? 420 : 1024
+    height: isMobile ? 760 : 700
+    minimumWidth: isMobile ? 360 : 1024
+    minimumHeight: isMobile ? 600 : 700
 
     Material.theme: Material.Light
     Material.accent: Material.Blue

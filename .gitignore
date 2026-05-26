@@ -1,33 +1,72 @@
+# ── 环境与密钥 ──
 .env
+.env.*
+*.env.local
 
-vector_store/
-models/
-
-logs/
-data/temp_audios/
-*.wav
-*.mp3
-
+# ── Python 编译缓存 ──
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
+# ── Python 工具缓存 ──
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# ── 模型权重（数百 MB ~ 数 GB） ──
+backend/models/
+backend/LiveTalking/models/
+*.pth
+*.pt
+*.onnx
+*.safetensors
+*.bin
+*.ckpt
+
+# ── 向量数据库（运行产物） ──
+backend/vector_store/
+
+# ── 运行时产出：音频、视频、日志 ──
+*.wav
+*.mp3
+*.m4a
+*.mp4
+*.aac
+*.flac
+*.ogg
+*.log
+logs/
+
+# ── 后端临时文件 ──
+backend/data/temp_audios/
+
+# ── LiveTalking 运行产物 ──
+backend/LiveTalking/livetalking.log
+backend/LiveTalking/data/avatars/*/
+!backend/LiveTalking/data/avatars/.gitkeep
+
+# ── IDE 与编辑器 ──
 .vscode/
 .idea/
+.cursor/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
 
+# ── 数据库 ──
 *.db
+*.sqlite3
 
-AGENTS.md 
+# ── 前端构建产物 ──
+frontend/build/
 
-# 忽略我测试时的临时音频文件
-backend/data/temp_audios/
-backend/data/*.m4a
-backend/data/*.wav
-<<<<<<< HEAD
+# ── 工具链 ──
+.claude/
+.sisyphus/
+.opencode/
 
 # 临时导出的项目结构
 /project_structure.txt
-=======
-*.sh
->>>>>>> f4cc283b2677ca3a023417a000f649f998fd8824

@@ -17,6 +17,7 @@ class ConversationManager : public QObject
     Q_PROPERTY(bool streamingAiResponse READ streamingAiResponse NOTIFY streamingAiResponseChanged)
     Q_PROPERTY(QString currentAudioUrl READ currentAudioUrl NOTIFY currentAudioUrlChanged)
     Q_PROPERTY(bool ttsPending READ ttsPending NOTIFY ttsPendingChanged)
+    Q_PROPERTY(QString currentSentence READ currentSentence NOTIFY currentSentenceChanged)
 public:
     explicit ConversationManager(QObject *parent = nullptr);
 
@@ -28,6 +29,7 @@ public:
     bool streamingAiResponse() const;
     QString currentAudioUrl() const;
     bool ttsPending() const;
+    QString currentSentence() const;
 
     Q_INVOKABLE void sendMessage(const QString &text);
     Q_INVOKABLE void sendVoiceMessage(const QString &audioFilePath);
@@ -53,6 +55,7 @@ signals:
     void errorOccurred(const QString &error);
     void currentAudioUrlChanged();
     void ttsPendingChanged();
+    void currentSentenceChanged();
 
 private:
     int m_currentConversationId = -1;
@@ -70,6 +73,7 @@ private:
     QString m_pendingVoiceFilePath;
     QString m_currentAudioUrl;
     bool m_ttsPending = false;
+    QString m_currentSentence;
 
     void appendMessage(const QString &role, const QString &content);
     void updateLastAiMessageContent(const QString &token);

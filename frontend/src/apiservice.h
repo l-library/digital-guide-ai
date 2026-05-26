@@ -35,7 +35,7 @@ public:
         QFile file("config.json");
         if (!file.open(QIODevice::ReadOnly)) {
             qDebug() << "Fail to read config.json!";
-            return 8000; // 默认值
+            return 8000;
         }
 
         QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
@@ -43,6 +43,36 @@ public:
         int Port = obj["backend"].toObject()["port"].toInt();
         qDebug() << "Read port:" << Port;
         return Port;
+    }
+    static QString getLiveTalkingHost()
+    {
+        QFile file("config.json");
+        if (!file.open(QIODevice::ReadOnly)) {
+            qDebug() << "Fail to read config.json!";
+            return "127.0.0.1";
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        QJsonObject obj = doc.object();
+        QString host = obj["livetalking"].toObject()["host"].toString();
+        if (host.isEmpty()) host = "127.0.0.1";
+        qDebug() << "Read livetalking host:" << host;
+        return host;
+    }
+    static int getLiveTalkingPort()
+    {
+        QFile file("config.json");
+        if (!file.open(QIODevice::ReadOnly)) {
+            qDebug() << "Fail to read config.json!";
+            return 8010;
+        }
+
+        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
+        QJsonObject obj = doc.object();
+        int port = obj["livetalking"].toObject()["port"].toInt();
+        if (port == 0) port = 8010;
+        qDebug() << "Read livetalking port:" << port;
+        return port;
     }
 };
 
@@ -89,6 +119,7 @@ public:
     // Digital humans
     void loadDigitalHumans();
     void setDefaultDigitalHuman(int dhId);
+    void registerLiveTalkingSession(int conversationId, const QString &sessionId);
 
     // Settings
     void getSetting(const QString &key);
@@ -118,6 +149,7 @@ signals:
     void wsConnected();
     void wsDisconnected();
     void wsTokenReceived(int conversationId, const QString &token);
+    void wsSentenceReceived(int conversationId, const QString &sentence);
     void wsDoneReceived(int conversationId, int messageId, const QString &fullContent, const QString &audioUrl);
     void wsError(const QString &message);
 

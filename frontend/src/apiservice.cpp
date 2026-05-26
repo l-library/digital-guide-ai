@@ -334,6 +334,8 @@ void ApiService::sendAiMessage(int conversationId,
                 QString type = obj["type"].toString();
                 if (type == "token") {
                     emit wsTokenReceived(conversationId, obj["content"].toString());
+                } else if (type == "sentence") {
+                    emit wsSentenceReceived(conversationId, obj["content"].toString());
                 } else if (type == "done") {
                     emit wsDoneReceived(conversationId, obj["message_id"].toInt(), obj["full_content"].toString(), obj["audio_url"].toString());
                 } else if (type == "title_updated") {
@@ -382,6 +384,10 @@ void ApiService::connectWebSocket()
             int convId = msg["conversation_id"].toInt();
             QString token = msg["content"].toString();
             emit wsTokenReceived(convId, token);
+        } else if (type == "sentence") {
+            int convId = msg["conversation_id"].toInt();
+            QString sentence = msg["content"].toString();
+            emit wsSentenceReceived(convId, sentence);
         } else if (type == "done") {
             int convId = msg["conversation_id"].toInt();
             int msgId = msg["message_id"].toInt();
@@ -499,6 +505,8 @@ QHttpPart dhIdPart;
                     emit voiceTranscribedText(conversationId, obj["content"].toString());
                 } else if (type == "token") {
                     emit voiceTokenReceived(conversationId, obj["content"].toString());
+                } else if (type == "sentence") {
+                    emit wsSentenceReceived(conversationId, obj["content"].toString());
                 } else if (type == "done") {
                     emit voiceDoneReceived(conversationId, obj["message_id"].toInt(), obj["full_content"].toString(), obj["audio_url"].toString());
                 } else if (type == "title_updated") {
@@ -567,6 +575,20 @@ void ApiService::setDefaultDigitalHuman(int dhId)
     QTimer::singleShot(0, this, [this]() {
         emit defaultDigitalHumanSet(true);
     });
+}
+
+void ApiService::registerLiveTalkingSession(int conversationId, const QString &sessionId)
+{
+    QUrl url(BASE_URL + "/api/v1/digital-human/register_session");
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject body;
+    body["conversation_id"] = conversationId;
+    body["session_id"] = sessionId;
+
+    m_networkManager->post(req, QJsonDocument(body).toJson());
+    qDebug() << "ApiService: 注册 LiveTalking session, conversation_id=" << conversationId << "session_id=" << sessionId;
 }
 
 // ==================== Settings (stubs) ====================

@@ -1,10 +1,14 @@
+import asyncio
 import json
 import os
+import re
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.rag_service import retrieve_context, build_prompt
 from app.services.llm_service import generate_stream_async, generate_title_async
 from app.services.tts_service import synthesize_to_file
+from app.services.digital_human_client import get_client as get_dh_client
+from app.services.digital_human_session import get_session_id
 from app.models import Conversation, Message
 from app.database import SessionLocal
 from sqlalchemy import func
@@ -13,6 +17,70 @@ router = APIRouter()
 
 TEMP_AUDIO_DIR = os.path.abspath(os.path.join("data", "temp_audios"))
 os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
+
+
+async def _send_audio_to_livetalking(conversation_id: int, audio_filename: str):
+    """将 TTS 生成的音频文件发送给 LiveTalking，驱动口型动画"""
+    sessionid = get_session_id(conversation_id)
+    if sessionid is None:
+        return
+    filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
+    if not os.path.exists(filepath):
+        return
+    try:
+        with open(filepath, "rb") as f:
+            audio_bytes = f.read()
+        await get_dh_client().send_audio(sessionid, audio_bytes)
+    except Exception as e:
+        print(f"[LiveTalking音频推送失败] conversation_id={conversation_id}: {e}")
+
+
+def _split_sentences(text: str) -> list[str]:
+    """按中文句号、感叹号、问号、换行符切分句子，过滤空串"""
+    return [s for s in re.split(r'[。！？\n]+', text) if s.strip()]
+
+
+# TTS Future 队列：合成并发执行，但播报按 LLM 生成顺序严格串行
+_tts_queues: dict[int, asyncio.Queue] = {}
+
+
+async def _tts_player(conversation_id: int, queue: asyncio.Queue):
+    """顺序消费队列中的 TTS Future，逐句发送给 LiveTalking 播报"""
+    try:
+        while True:
+            future = await queue.get()
+            if future is None:
+                break
+            try:
+                audio_filename = await future
+                if not audio_filename:
+                    continue
+            except Exception as e:
+                print(f"[TTS合成异常] conv={conversation_id}: {e}")
+                continue
+            try:
+                await _send_audio_to_livetalking(conversation_id, audio_filename)
+                filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
+                file_size = os.path.getsize(filepath)
+                duration = file_size / 5000 + 0.3
+                await asyncio.sleep(duration)
+            except Exception as e:
+                print(f"[TTS播报失败] conv={conversation_id}: {e}")
+    finally:
+        _tts_queues.pop(conversation_id, None)
+
+
+async def _enqueue_tts(conversation_id: int, text: str, queue: asyncio.Queue):
+    """合成 TTS 并按 LLM 生成顺序入队；合成可并发，播报严格保序"""
+    loop = asyncio.get_event_loop()
+    future = loop.create_future()
+    await queue.put(future)
+    try:
+        audio_filename = await synthesize_to_file(text, TEMP_AUDIO_DIR)
+        future.set_result(audio_filename if audio_filename else None)
+    except Exception as e:
+        print(f"[逐句TTS合成失败] conv={conversation_id}: {e}")
+        future.set_result(None)
 
 
 @router.websocket("/ws/chat")
@@ -119,9 +187,29 @@ async def websocket_chat(ws: WebSocket):
                     )
 
                 full_content = ""
+                sentence_buffer = ""
+                queue = asyncio.Queue()
+                _tts_queues[conversation_id] = queue
+                player_task = asyncio.create_task(_tts_player(conversation_id, queue))
                 try:
                     async for token in generate_stream_async(messages_for_llm):
                         full_content += token
+                        sentence_buffer += token
+                        if sentence_buffer and sentence_buffer[-1] in "。！？\n":
+                            sentences = _split_sentences(sentence_buffer)
+                            for s in sentences:
+                                await send_json(
+                                    {
+                                        "type": "sentence",
+                                        "conversation_id": conversation_id,
+                                        "content": s,
+                                    }
+                                )
+                                if response_type == 1:
+                                    asyncio.create_task(
+                                        _enqueue_tts(conversation_id, s, queue)
+                                    )
+                            sentence_buffer = ""
                         await send_json(
                             {
                                 "type": "token",
@@ -129,7 +217,24 @@ async def websocket_chat(ws: WebSocket):
                                 "content": token,
                             }
                         )
+                    if sentence_buffer.strip():
+                        remaining = sentence_buffer.strip()
+                        await send_json(
+                            {
+                                "type": "sentence",
+                                "conversation_id": conversation_id,
+                                "content": remaining,
+                            }
+                        )
+                        if response_type == 1:
+                            asyncio.create_task(
+                                _enqueue_tts(conversation_id, remaining, queue)
+                            )
+                    if response_type == 1:
+                        await queue.put(None)
                 except Exception as gen_err:
+                    if response_type == 1:
+                        await queue.put(None)
                     await send_json(
                         {
                             "type": "error",
