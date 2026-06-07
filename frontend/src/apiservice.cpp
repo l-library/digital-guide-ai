@@ -532,27 +532,125 @@ QHttpPart dhIdPart;
     });
 }
 
-// ==================== Knowledge docs (stubs) ====================
+// ==================== Knowledge docs (real HTTP) ====================
 
-void ApiService::uploadKnowledgeDoc(int, const QString &title, const QString &, const QString &)
+void ApiService::uploadKnowledgeDoc(int userId, const QString &title, const QString &filePath, const QString &)
 {
-    static int nextDocId = 200;
-    QTimer::singleShot(0, this, [this, nextDocId]() {
-        emit knowledgeDocUploaded(nextDocId);
+    QFile *file = new QFile(filePath);
+    if (!file->open(QIODevice::ReadOnly)) {
+        delete file;
+        emit apiError(QStringLiteral("无法打开文件: ") + filePath);
+        return;
+    }
+
+    QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+
+    // file 字段
+    QHttpPart filePart;
+    filePart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                       QVariant(QStringLiteral("form-data; name=\"file\"; filename=\"%1\"").arg(title)));
+    filePart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant("application/octet-stream"));
+    filePart.setBodyDevice(file);
+    file->setParent(multiPart);
+
+    // title 字段
+    QHttpPart titlePart;
+    titlePart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                        QVariant(QStringLiteral("form-data; name=\"title\"")));
+    titlePart.setBody(title.toUtf8());
+
+    // user_id 字段
+    QHttpPart userIdPart;
+    userIdPart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                         QVariant(QStringLiteral("form-data; name=\"user_id\"")));
+    userIdPart.setBody(QString::number(userId).toUtf8());
+
+    multiPart->append(filePart);
+    multiPart->append(titlePart);
+    multiPart->append(userIdPart);
+
+    QNetworkRequest req(QUrl(BASE_URL + "/api/v1/admin/knowledge-docs"));
+    QNetworkReply *reply = m_networkManager->post(req, multiPart);
+    multiPart->setParent(reply);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "uploadKnowledgeDoc error:" << reply->errorString();
+            emit apiError(QStringLiteral("文档上传失败: ") + reply->errorString());
+            return;
+        }
+        QByteArray responseData = reply->readAll();
+        QJsonObject resp = QJsonDocument::fromJson(responseData).object();
+        qDebug() << "uploadKnowledgeDoc response:" << responseData;
+
+        // 兼容两种响应格式：直接返回数据 或 包在 data 字段中
+        int docId = 0;
+        if (resp.contains("doc_id")) {
+            docId = resp["doc_id"].toInt();
+        } else if (resp.contains("data") && resp["data"].isObject()) {
+            docId = resp["data"].toObject()["doc_id"].toInt();
+        }
+
+        if (docId > 0) {
+            emit knowledgeDocUploaded(docId);
+        } else {
+            emit apiError(QStringLiteral("文档上传成功但返回数据异常"));
+        }
     });
 }
 
-void ApiService::deleteKnowledgeDoc(int)
+void ApiService::deleteKnowledgeDoc(int docId)
 {
-    QTimer::singleShot(0, this, [this]() {
-        emit knowledgeDocDeleted(true);
+    QNetworkRequest req(QUrl(BASE_URL + "/api/v1/admin/knowledge-docs/" + QString::number(docId)));
+    QNetworkReply *reply = m_networkManager->deleteResource(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        bool success = (reply->error() == QNetworkReply::NoError);
+        if (!success) {
+            qDebug() << "deleteKnowledgeDoc error:" << reply->errorString();
+        }
+        emit knowledgeDocDeleted(success);
     });
 }
 
 void ApiService::loadKnowledgeDocs(int)
 {
-    QTimer::singleShot(0, this, [this]() {
-        emit knowledgeDocsLoaded(QVariantList());
+    QNetworkRequest req(QUrl(BASE_URL + "/api/v1/admin/knowledge-docs"));
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "loadKnowledgeDocs error:" << reply->errorString();
+            emit knowledgeDocsLoaded(QVariantList());
+            return;
+        }
+        QByteArray responseData = reply->readAll();
+        QJsonObject resp = QJsonDocument::fromJson(responseData).object();
+        qDebug() << "loadKnowledgeDocs response:" << responseData;
+
+        // 兼容两种响应格式
+        QJsonArray items;
+        if (resp.contains("items")) {
+            items = resp["items"].toArray();
+        } else if (resp.contains("data") && resp["data"].isObject()) {
+            items = resp["data"].toObject()["items"].toArray();
+        }
+
+        QVariantList docs;
+        for (const QJsonValue &val : items) {
+            QJsonObject obj = val.toObject();
+            QVariantMap doc;
+            doc["id"] = obj["doc_id"].toInt();
+            doc["title"] = obj["title"].toString();
+            doc["fileType"] = obj["file_type"].toString();
+            doc["fileSize"] = obj["file_size"].toInt();
+            doc["status"] = obj["status"].toString();
+            doc["chunkCount"] = obj["chunk_count"].toInt();
+            doc["createdAt"] = obj["created_at"].toString();
+            docs.append(doc);
+        }
+        emit knowledgeDocsLoaded(docs);
     });
 }
 

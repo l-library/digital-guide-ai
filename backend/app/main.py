@@ -17,6 +17,16 @@ async def lifespan(app: FastAPI):
     _get_stores()
     print("预热完成，服务就绪。")
 
+    print("正在同步预摄入文档到数据库...")
+    from app.services.knowledge_service import sync_pre_ingested_docs
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        sync_pre_ingested_docs(db)
+    finally:
+        db.close()
+    print("预摄入文档同步完成。")
+
     print("正在预热ASR服务，加载Whisper模型...")
     from app.services.asr_service import _get_model
     import asyncio

@@ -4,7 +4,6 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import os
-import re
 import time
 import json
 import asyncio
@@ -17,85 +16,19 @@ from app.services.llm_service import (
 )
 from app.services.asr_service import transcribe_audio
 from app.services.tts_service import synthesize_to_file
-from app.services.digital_human_client import get_client as get_dh_client
-from app.services.digital_human_session import get_session_id
+from app.services.tts_streaming import (
+    split_sentences,
+    send_audio_to_livetalking,
+    synthesize_and_resolve,
+    enqueue_tts_sync,
+    create_tts_queue,
+    TEMP_AUDIO_DIR,
+)
 from app.database import get_db, SessionLocal
 from app.models import Conversation, Message
 from sqlalchemy import func
 
 router = APIRouter()
-
-TEMP_AUDIO_DIR = os.path.abspath(os.path.join("data", "temp_audios"))
-os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
-
-
-async def _send_audio_to_livetalking(conversation_id: int, audio_filename: str):
-    """将 TTS 生成的音频文件发送给 LiveTalking，驱动口型动画"""
-    sessionid = get_session_id(conversation_id)
-    if sessionid is None:
-        return
-    filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
-    if not os.path.exists(filepath):
-        return
-    try:
-        with open(filepath, "rb") as f:
-            audio_bytes = f.read()
-        await get_dh_client().send_audio(sessionid, audio_bytes)
-    except Exception as e:
-        print(f"[LiveTalking音频推送失败] conversation_id={conversation_id}: {e}")
-
-
-def _split_sentences(text: str) -> list[str]:
-    """按中文句号/感叹号/问号/换行拆分句子，过滤空串"""
-    return [s for s in re.split(r'[。！？\n]+', text) if s.strip()]
-
-
-# TTS Future 队列：合成并发执行，但播报按 LLM 生成顺序严格串行
-_tts_queues: dict[int, asyncio.Queue] = {}
-
-
-async def _tts_player(conversation_id: int, queue: asyncio.Queue):
-    """顺序消费队列中的 TTS Future，逐句发送给 LiveTalking 播报"""
-    try:
-        while True:
-            future = await queue.get()
-            if future is None:
-                break
-            try:
-                audio_filename = await future
-                if not audio_filename:
-                    continue
-            except Exception as e:
-                print(f"[TTS合成异常] conv={conversation_id}: {e}")
-                continue
-            try:
-                await _send_audio_to_livetalking(conversation_id, audio_filename)
-                filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
-                file_size = os.path.getsize(filepath)
-                duration = file_size / 5000 + 0.3
-                await asyncio.sleep(duration)
-            except Exception as e:
-                print(f"[TTS播报失败] conv={conversation_id}: {e}")
-    finally:
-        _tts_queues.pop(conversation_id, None)
-
-
-async def _synthesize_and_resolve(text: str, future: asyncio.Future):
-    """合成 TTS 并将结果设置到 future；future 已在主协程中同步入队"""
-    try:
-        audio_filename = await synthesize_to_file(text, TEMP_AUDIO_DIR)
-        future.set_result(audio_filename if audio_filename else None)
-    except Exception as e:
-        print(f"[逐句TTS合成失败]: {e}")
-        future.set_result(None)
-
-
-def _enqueue_tts_sync(text: str, queue: asyncio.Queue) -> asyncio.Future:
-    """在主协程中同步将 TTS future 入队，消除竞态条件"""
-    loop = asyncio.get_event_loop()
-    future = loop.create_future()
-    queue.put_nowait(future)
-    return future
 
 
 class ChatTextRequest(BaseModel):
@@ -109,9 +42,52 @@ class SimpleChatRequest(BaseModel):
     question: str
 
 
+# ─── 构建多轮对话消息列表的工具函数 ────────────────────────────────────────────
+
+
+def _build_llm_messages(
+    history_msgs: list,
+    user_query: str,
+    context_list: list[str],
+) -> list[dict]:
+    """根据对话历史构建发送给 LLM 的消息列表。
+    首轮对话（≤2条消息）使用完整 RAG prompt，
+    多轮对话使用 system message + 上下文 + 完整历史。
+    """
+    messages = [{"role": m.role, "content": m.content} for m in history_msgs]
+
+    if len(messages) <= 2:
+        prompt = build_prompt(user_query, context_list)
+        return [{"role": "user", "content": prompt}]
+
+    system_msg = {
+        "role": "system",
+        "content": (
+            "你是一名经验丰富的景区导游。作为一名导游，你需要为用户提供丰富、有趣的旅行体验。"
+            "核心技能：丰富的旅游知识储备、出色的沟通和表达能力、创意思维和创新能力"
+            "你的工作准则是提供准确、可靠的旅游信息、尊重不同文化和地区的习俗、以用户为中心，满足个性化需求"
+            "工作流程：了解用户需求和偏好、引导用户说出自己的需求、提供详细解说和互动、收集用户反馈，持续优化体验"
+            "沟通风格：保持热情、友好、幽默的态度，让用户感受到愉快的虚拟旅游体验。"
+            "价值观：尊重文化多样性、提供真实、有价值的旅游信息、注重用户体验，满足个性化需求"
+            "语气自然亲切。不要使用emoji或动作描写。"
+            "如果资料中没有相关信息，请如实告知。"
+        ),
+    }
+    context_msg = {
+        "role": "system",
+        "content": f"参考景区资料：\n{chr(10).join(context_list)}",
+    }
+    history_without_last = messages[:-1]
+    last_user_msg = messages[-1]
+    return [system_msg, context_msg] + history_without_last + [last_user_msg]
+
+
+# ─── 流式文本问答 ──────────────────────────────────────────────────────────────
+
+
 @router.post("/chat/stream")
 async def stream_chat(req: ChatTextRequest):
-    """流式文本问答，逐 token 返回 SSE 事件"""
+    """流式文本问答，逐 token 返回 SSE 事件，支持多轮对话历史"""
     db = SessionLocal()
     try:
         conv = (
@@ -132,29 +108,37 @@ async def stream_chat(req: ChatTextRequest):
         db.commit()
 
         context_list = retrieve_context(req.content)
-        prompt = build_prompt(req.content, context_list)
 
         async def event_generator():
             full_content = ""
             sentence_buffer = ""
-            queue = asyncio.Queue()
-            _tts_queues[req.conversation_id] = queue
-            player_task = asyncio.create_task(_tts_player(req.conversation_id, queue))
+            stream_id, queue, player_task = create_tts_queue(req.conversation_id)
 
             try:
-                async for token in generate_stream_async(
-                    [{"role": "user", "content": prompt}]
-                ):
+                # 加载对话历史（含刚保存的用户消息），构建多轮消息列表
+                history_msgs = (
+                    db.query(Message)
+                    .filter(Message.conversation_id == req.conversation_id)
+                    .order_by(Message.created_at)
+                    .all()
+                )
+                messages_for_llm = _build_llm_messages(
+                    history_msgs, req.content, context_list
+                )
+
+                async for token in generate_stream_async(messages_for_llm):
                     full_content += token
                     sentence_buffer += token
                     yield f"data: {json.dumps({'type': 'token', 'content': token}, ensure_ascii=False)}\n\n"
 
                     if sentence_buffer and sentence_buffer[-1] in "。！？\n":
-                        sentences = _split_sentences(sentence_buffer)
+                        sentences = split_sentences(sentence_buffer)
                         for s in sentences:
                             if req.response_type == 1:
-                                future = _enqueue_tts_sync(s, queue)
-                                asyncio.create_task(_synthesize_and_resolve(s, future))
+                                future = enqueue_tts_sync(s, queue)
+                                asyncio.create_task(
+                                    synthesize_and_resolve(s, future)
+                                )
                             yield f"data: {json.dumps({'type': 'sentence', 'conversation_id': req.conversation_id, 'content': s}, ensure_ascii=False)}\n\n"
                         sentence_buffer = ""
 
@@ -170,8 +154,8 @@ async def stream_chat(req: ChatTextRequest):
             if sentence_buffer.strip():
                 s = sentence_buffer.strip()
                 if req.response_type == 1:
-                    future = _enqueue_tts_sync(s, queue)
-                    asyncio.create_task(_synthesize_and_resolve(s, future))
+                    future = enqueue_tts_sync(s, queue)
+                    asyncio.create_task(synthesize_and_resolve(s, future))
                 yield f"data: {json.dumps({'type': 'sentence', 'conversation_id': req.conversation_id, 'content': s}, ensure_ascii=False)}\n\n"
 
             if req.response_type == 1:
@@ -185,7 +169,6 @@ async def stream_chat(req: ChatTextRequest):
                     )
                     if audio_filename:
                         audio_url = f"/api/v1/download_audio?filename={audio_filename}"
-                        # 逐句TTS已发送音频到LiveTalking，此处仅生成audio_url供数据库存储和AudioPlayer回退
                 except Exception as e:
                     print(f"[TTS失败] {e}")
 
@@ -225,6 +208,9 @@ async def stream_chat(req: ChatTextRequest):
         raise
 
 
+# ─── 非流式文本问答 ────────────────────────────────────────────────────────────
+
+
 @router.post("/chat/text")
 async def handle_text_chat_with_persistence(
     req: ChatTextRequest, db: Session = Depends(get_db)
@@ -254,7 +240,9 @@ async def handle_text_chat_with_persistence(
             audio_filename = await synthesize_to_file(answer_text, TEMP_AUDIO_DIR)
             if audio_filename:
                 audio_url = f"/api/v1/download_audio?filename={audio_filename}"
-                await _send_audio_to_livetalking(req.conversation_id, audio_filename)
+                await send_audio_to_livetalking(
+                    req.conversation_id, audio_filename
+                )
         except Exception as e:
             print(f"[TTS失败] {e}")
 
@@ -300,6 +288,9 @@ async def handle_text_chat_with_persistence(
     }
 
 
+# ─── 纯文本问答（简单版，无持久化）─────────────────────────────────────────────
+
+
 @router.post("/chat")
 def handle_text_chat(request: SimpleChatRequest):
     """纯文本问答（简单版，无持久化，用于快速测试）"""
@@ -313,7 +304,7 @@ def handle_text_chat(request: SimpleChatRequest):
     return {"status": "success", "question": user_text, "answer": answer_text}
 
 
-# 接口 2：语音问答闭环接口 (ASR -> RAG -> LLM -> TTS)
+# ─── 语音问答 ─────────────────────────────────────────────────────────────────
 
 
 @router.post("/chat_voice")
@@ -321,31 +312,44 @@ async def handle_voice_chat(audio_file: UploadFile = File(...)):
     """处理前端录音文件，返回解答文字和生成的语音音频"""
 
     input_audio_path = os.path.join(TEMP_AUDIO_DIR, f"in_{time.time()}.wav")
-    with open(input_audio_path, "wb") as f:
-        f.write(await audio_file.read())
-
-    user_text = await asyncio.to_thread(transcribe_audio, input_audio_path)
-    print(f"游客语音识别结果：{user_text}")
-
-    context_list = retrieve_context(user_text)
-    prompt = build_prompt(user_text, context_list)
-    answer_text = generate(prompt)
-    print(f"数字人回复生成：{answer_text}")
-
-    audio_url = None
     try:
-        audio_filename = await synthesize_to_file(answer_text, TEMP_AUDIO_DIR)
-        if audio_filename:
-            audio_url = f"/api/v1/download_audio?filename={audio_filename}"
-    except Exception as e:
-        print(f"[TTS失败] {e}")
+        with open(input_audio_path, "wb") as f:
+            f.write(await audio_file.read())
 
-    return {
-        "status": "success",
-        "question": user_text,
-        "answer": answer_text,
-        "audio_url": audio_url,
-    }
+        user_text = await asyncio.to_thread(transcribe_audio, input_audio_path)
+        print(f"游客语音识别结果：{user_text}")
+
+        # 检查 ASR 是否失败，避免将错误信息传给 RAG/LLM
+        if user_text.startswith("语音识别失败:"):
+            return {"status": "error", "message": user_text}
+
+        context_list = retrieve_context(user_text)
+        prompt = build_prompt(user_text, context_list)
+        answer_text = generate(prompt)
+        print(f"数字人回复生成：{answer_text}")
+
+        audio_url = None
+        try:
+            audio_filename = await synthesize_to_file(answer_text, TEMP_AUDIO_DIR)
+            if audio_filename:
+                audio_url = f"/api/v1/download_audio?filename={audio_filename}"
+        except Exception as e:
+            print(f"[TTS失败] {e}")
+
+        return {
+            "status": "success",
+            "question": user_text,
+            "answer": answer_text,
+            "audio_url": audio_url,
+        }
+    finally:
+        try:
+            os.remove(input_audio_path)
+        except OSError:
+            pass
+
+
+# ─── 语音流式问答 ─────────────────────────────────────────────────────────────
 
 
 @router.post("/chat/voice_stream")
@@ -355,7 +359,7 @@ async def handle_voice_stream(
     digital_human_id: int = Form(0),
     response_type: int = Form(1),
 ):
-    """语音流式问答：上传音频 → ASR识别 → 流式返回识别文本 + LLM回复"""
+    """语音流式问答：上传音频 → ASR识别 → 流式返回识别文本 + LLM回复，支持多轮对话历史"""
     db = SessionLocal()
     try:
         conv = db.query(Conversation).filter(Conversation.id == conversation_id).first()
@@ -374,9 +378,7 @@ async def handle_voice_stream(
         async def event_generator():
             full_content = ""
             sentence_buffer = ""
-            queue = asyncio.Queue()
-            _tts_queues[conversation_id] = queue
-            player_task = asyncio.create_task(_tts_player(conversation_id, queue))
+            stream_id, queue, player_task = create_tts_queue(conversation_id)
             try:
                 user_text = await asyncio.to_thread(transcribe_audio, input_audio_path)
                 print(f"[voice_stream] 识别结果：{user_text}")
@@ -399,21 +401,31 @@ async def handle_voice_stream(
                 db.commit()
 
                 context_list = retrieve_context(user_text)
-                prompt_text = build_prompt(user_text, context_list)
 
-                async for token in generate_stream_async(
-                    [{"role": "user", "content": prompt_text}]
-                ):
+                # 加载对话历史（含刚保存的用户消息），构建多轮消息列表
+                history_msgs = (
+                    db.query(Message)
+                    .filter(Message.conversation_id == conversation_id)
+                    .order_by(Message.created_at)
+                    .all()
+                )
+                messages_for_llm = _build_llm_messages(
+                    history_msgs, user_text, context_list
+                )
+
+                async for token in generate_stream_async(messages_for_llm):
                     full_content += token
                     sentence_buffer += token
                     yield f"data: {json.dumps({'type': 'token', 'conversation_id': conversation_id, 'content': token}, ensure_ascii=False)}\n\n"
 
                     if sentence_buffer and sentence_buffer[-1] in "。！？\n":
-                        sentences = _split_sentences(sentence_buffer)
+                        sentences = split_sentences(sentence_buffer)
                         for s in sentences:
                             if response_type == 1:
-                                future = _enqueue_tts_sync(s, queue)
-                                asyncio.create_task(_synthesize_and_resolve(s, future))
+                                future = enqueue_tts_sync(s, queue)
+                                asyncio.create_task(
+                                    synthesize_and_resolve(s, future)
+                                )
                             yield f"data: {json.dumps({'type': 'sentence', 'conversation_id': conversation_id, 'content': s}, ensure_ascii=False)}\n\n"
                         sentence_buffer = ""
 
@@ -421,8 +433,8 @@ async def handle_voice_stream(
                 if sentence_buffer.strip():
                     s = sentence_buffer.strip()
                     if response_type == 1:
-                        future = _enqueue_tts_sync(s, queue)
-                        asyncio.create_task(_synthesize_and_resolve(s, future))
+                        future = enqueue_tts_sync(s, queue)
+                        asyncio.create_task(synthesize_and_resolve(s, future))
                     yield f"data: {json.dumps({'type': 'sentence', 'conversation_id': conversation_id, 'content': s}, ensure_ascii=False)}\n\n"
 
                 if response_type == 1:
@@ -489,7 +501,9 @@ async def handle_voice_stream(
         raise
 
 
-# 接口 3：配套的音频下载接口 (供前端播放使用)
+# ─── 音频下载 ─────────────────────────────────────────────────────────────────
+
+
 @router.get("/download_audio")
 def download_audio(filename: str):
     """前端拿到 audio_url 后，调用这个接口获取真实的 mp3 文件"""

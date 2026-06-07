@@ -30,7 +30,8 @@ def _get_embeddings() -> HuggingFaceEmbeddings:
         DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
         _embeddings = HuggingFaceEmbeddings(
             model_name=MODEL_PATH,
-            model_kwargs={'device': DEVICE}
+            model_kwargs={'device': DEVICE},
+            encode_kwargs={"normalize_embeddings": True},
         )
         print(f"[Knowledge] Embedding 模型初始化成功，使用设备: {DEVICE}")
     return _embeddings
@@ -136,3 +137,76 @@ def process_document(db: Session, doc_id: int):
     finally:
         # 无论成功失败，都必须保存最终状态
         db.commit()
+
+
+def sync_pre_ingested_docs(db: Session):
+    """
+    启动时扫描 Chroma guide_parents 集合中的预摄入文档，
+    为尚未在 SQL 数据库中建档的文档自动创建 KnowledgeDoc 记录，
+    使前端知识库列表可以展示这些文档。
+    """
+    from app.models import KnowledgeDoc
+
+    try:
+        embeddings = _get_embeddings()
+        parent_store = Chroma(
+            collection_name="guide_parents",
+            persist_directory=VECTOR_STORE_DIR,
+            embedding_function=embeddings,
+        )
+
+        results = parent_store.get()
+        if not results or not results.get("metadatas"):
+            return
+
+        # 提取所有唯一的 source 文件名
+        seen_sources = set()
+        for metadata in results["metadatas"]:
+            source = metadata.get("source", "")
+            if source:
+                seen_sources.add(source)
+
+        if not seen_sources:
+            return
+
+        # 统计每个 source 对应的子文档数量
+        child_store = Chroma(
+            collection_name="guide_children",
+            persist_directory=VECTOR_STORE_DIR,
+            embedding_function=embeddings,
+        )
+        child_results = child_store.get()
+        source_chunk_counts = {}
+        if child_results and child_results.get("metadatas"):
+            for meta in child_results["metadatas"]:
+                src = meta.get("source", "")
+                if src:
+                    source_chunk_counts[src] = source_chunk_counts.get(src, 0) + 1
+
+        created_count = 0
+        for source in seen_sources:
+            existing = db.query(KnowledgeDoc).filter(
+                KnowledgeDoc.title == source
+            ).first()
+            if existing:
+                continue
+
+            chunk_count = source_chunk_counts.get(source, 0)
+            new_doc = KnowledgeDoc(
+                title=source,
+                file_type="docx",
+                file_size=0,
+                file_path="",
+                user_id=1,
+                status="ready",
+                chunk_count=chunk_count,
+            )
+            db.add(new_doc)
+            created_count += 1
+
+        db.commit()
+        print(f"[Startup] 预摄入文档同步完成，新增 {created_count} 条记录，共 {len(seen_sources)} 个文档")
+
+    except Exception as e:
+        print(f"[Startup] 预摄入文档同步失败: {e}")
+        db.rollback()

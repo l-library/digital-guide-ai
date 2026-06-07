@@ -6,23 +6,40 @@ VECTOR_STORE_PATH = "vector_store/lingshan"
 
 model_path = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "models", "bge-small-zh-v1.5"
+    "models",
+    "bge-small-zh-v1.5",
 )
 
 # 1. 意图识别
 # 根据问题关键词判断应该在哪个category里检索
 # 不识别时返回None，表示全库检索
 
+
 def detect_intent(query: str) -> str | None:
     if any(kw in query for kw in ["路线", "怎么玩", "行程", "游览顺序", "几小时"]):
         return "游览路线"
-    if any(kw in query for kw in ["门票", "价格", "多少钱", "几点", "开放时间",
-                                   "表演时间", "住宿", "餐饮", "交通", "贴士"]):
+    if any(
+        kw in query
+        for kw in [
+            "门票",
+            "价格",
+            "多少钱",
+            "几点",
+            "开放时间",
+            "表演时间",
+            "住宿",
+            "餐饮",
+            "交通",
+            "贴士",
+        ]
+    ):
         return "实用信息"
-    if any(kw in query for kw in ["介绍", "是什么", "在哪", "特色", "文化",
-                                   "历史", "建筑", "怎么样"]):
+    if any(
+        kw in query
+        for kw in ["介绍", "是什么", "在哪", "特色", "文化", "历史", "建筑", "怎么样"]
+    ):
         return "景点介绍"
-    return None   # 兜底：不加过滤，全库检索
+    return None  # 兜底：不加过滤，全库检索
 
 
 # 2. 初始化vectorstore连接
@@ -31,11 +48,13 @@ def detect_intent(query: str) -> str | None:
 _embeddings = None
 _child_store = None
 _parent_store = None
+_knowledge_store = None  # 用户上传文档集合
+
 
 def _get_stores():
-    global _embeddings, _child_store, _parent_store
+    global _embeddings, _child_store, _parent_store, _knowledge_store
     if _child_store is not None:
-        return _child_store, _parent_store   # 已初始化，直接返回
+        return _child_store, _parent_store, _knowledge_store
 
     _embeddings = HuggingFaceEmbeddings(
         model_name=model_path,
@@ -52,23 +71,30 @@ def _get_stores():
         embedding_function=_embeddings,
         collection_name="guide_parents",
     )
-    return _child_store, _parent_store
+    _knowledge_store = Chroma(
+        persist_directory=VECTOR_STORE_PATH,
+        embedding_function=_embeddings,
+        collection_name="lingshan_knowledge",
+    )
+    return _child_store, _parent_store, _knowledge_store
 
 
 # 3. 核心检索函数
 
+
 def retrieve_context(query: str, k: int = 3) -> list[str]:
     """
     输入用户问题，返回相关的父节完整内容列表。
+    同时检索预摄入文档（guide_children/guide_parents）和用户上传文档（lingshan_knowledge）。
     这个列表直接拼接后送给LLM。
     """
-    child_store, parent_store = _get_stores()
+    child_store, parent_store, knowledge_store = _get_stores()
+    context_list: list[str] = []
 
-    # 意图识别，决定是否加filter
+    # ===== 管道1：guide_children → guide_parents（预摄入景区资料）=====
     intent = detect_intent(query)
     search_filter = {"category": intent} if intent else None
 
-    # 第一步：子chunk相似度检索
     child_results = child_store.similarity_search(
         query,
         k=k,
@@ -76,13 +102,9 @@ def retrieve_context(query: str, k: int = 3) -> list[str]:
     )
 
     if not child_results:
-        # 如果加了filter没检索到，退回全库检索
         child_results = child_store.similarity_search(query, k=k)
 
-    # 第二步：通过parent_id取父节完整内容，去重
-    seen_parents = set()
-    context_list = []
-
+    seen_parents: set[str] = set()
     for doc in child_results:
         pid = doc.metadata.get("parent_id")
         if not pid or pid in seen_parents:
@@ -92,6 +114,16 @@ def retrieve_context(query: str, k: int = 3) -> list[str]:
         result = parent_store.get(where={"parent_id": pid})
         if result and result["documents"]:
             context_list.append(result["documents"][0])
+
+    # ===== 管道2：lingshan_knowledge（用户上传的文档）=====
+    try:
+        knowledge_results = knowledge_store.similarity_search(query, k=k)
+        for doc in knowledge_results:
+            content = doc.page_content
+            if content not in context_list:
+                context_list.append(content)
+    except Exception as e:
+        print(f"[RAG] lingshan_knowledge 检索失败: {e}")
 
     return context_list
 
@@ -103,7 +135,7 @@ def build_prompt(query: str, context_list: list[str]) -> str:
     """
     context_text = "\n\n---\n\n".join(context_list)
 
-    prompt = f"""你是灵山胜境景区的AI导游，请根据以下景区资料回答游客的问题。
+    prompt = f"""你是某个景区的AI导游，请根据以下景区资料回答游客的问题。
 要求：
 - 回答简洁，挑重点说，尽量控制在150字内
 - 语气自然亲切，像真人导游
@@ -120,3 +152,4 @@ def build_prompt(query: str, context_list: list[str]) -> str:
 【回答】"""
 
     return prompt
+
