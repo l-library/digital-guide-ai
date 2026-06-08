@@ -506,8 +506,8 @@ async def handle_voice_stream(
 
 @router.get("/download_audio")
 def download_audio(filename: str):
-    """前端拿到 audio_url 后，调用这个接口获取真实的 mp3 文件"""
+    """前端拿到 audio_url 后，调用这个接口获取真实的 wav 文件"""
     file_path = os.path.join(TEMP_AUDIO_DIR, filename)
     if not os.path.exists(file_path):
         return {"error": "音频文件找不到了"}
-    return FileResponse(file_path, media_type="audio/mpeg")
+    return FileResponse(file_path, media_type="audio/wav")

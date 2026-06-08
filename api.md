@@ -216,7 +216,7 @@ POST /chat/text
   "message_id": 42,
   "role": "assistant",
   "content": "故宫（紫禁城）建于明永乐四年（1406年），历时14年于永乐十八年（1420年）建成...",
-  "audio_url": "/api/v1/download_audio?filename=xxx.mp3",
+  "audio_url": "/api/v1/download_audio?filename=xxx.wav",
   "knowledge_sources": ["故宫介绍.docx"]
 }
 ```
@@ -251,7 +251,7 @@ POST /chat/voice
   "message_id": 42,
   "role": "assistant",
   "content": "故宫（紫禁城）建于明永乐四年（1406年）...",
-  "audio_url": "/api/v1/download_audio?filename=xxx.mp3"
+  "audio_url": "/api/v1/download_audio?filename=xxx.wav"
 }
 ```
 
@@ -292,7 +292,7 @@ data: {"type": "token", "conversation_id": 1, "content": "（紫禁城）"}
 3. **完成事件**：
 
 ```
-data: {"type": "done", "conversation_id": 1, "message_id": 42, "full_content": "故宫（紫禁城）建于明永乐四年（1406年）...", "audio_url": "/api/v1/download_audio?filename=xxx.mp3", "knowledge_sources": ["景区知识库"]}
+data: {"type": "done", "conversation_id": 1, "message_id": 42, "full_content": "故宫（紫禁城）建于明永乐四年（1406年）...", "audio_url": "/api/v1/download_audio?filename=xxx.wav", "knowledge_sources": ["景区知识库"]}
 ```
 
 4. **错误事件**：
@@ -315,10 +315,10 @@ data: {"type": "error", "conversation_id": 1, "message": "语音识别失败: ..
 ### 2.3 下载语音文件
 
 ```
-GET /download_audio?filename=xxx.mp3
+GET /download_audio?filename=xxx.wav
 ```
 
-**Response:** 二进制音频流（Content-Type: audio/mpeg）。
+**Response:** 二进制音频流（Content-Type: audio/wav）。
 
 ### 2.4 个性化路线推荐（待定）
 
@@ -443,7 +443,7 @@ WebSocket /ws/chat?token=<JWT_TOKEN>
   "conversation_id": 1,
   "message_id": 42,
   "full_content": "故宫（紫禁城）建于明永乐四年（1406年）...",
-  "audio_url": "/api/v1/download_audio?filename=xxx.mp3",
+  "audio_url": "/api/v1/download_audio?filename=xxx.wav",
   "knowledge_sources": ["故宫介绍.docx"],
   "digital_human_expression": "speaking"  // 表情指令
 }
@@ -635,7 +635,7 @@ GET /conversations/{conversation_id}/messages?page=1&page_size=50
       "conversation_id": 1,
       "role": "assistant",
       "content": "故宫（紫禁城）建于明永乐四年（1406年）...",
-      "audio_url": "/api/v1/download_audio?filename=xxx.mp3",
+      "audio_url": "/api/v1/download_audio?filename=xxx.wav",
       "knowledge_sources": ["故宫介绍.docx"],
       "created_at": "2026-04-28T10:00:02Z"
     }

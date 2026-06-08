@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from app.api.api_v1.api import api_router
 from app.api.api_v1.endpoints.websocket import router as ws_router
+import os
 
 
 @asynccontextmanager
@@ -32,6 +33,16 @@ async def lifespan(app: FastAPI):
     import asyncio
     await asyncio.to_thread(_get_model)
     print("ASR服务就绪。")
+
+    print("正在预热TTS服务，加载CosyVoice模型...")
+    from app.services.tts_service import init_tts_model
+    cosyvoice_dir = os.getenv("COSYVOICE_MODEL_DIR",
+        "/home/liborui/CosyVoice/pretrained_models/CosyVoice-300M-SFT")
+    try:
+        init_tts_model(cosyvoice_dir)
+        print("CosyVoice 模型加载完成")
+    except Exception as e:
+        print(f"[启动] CosyVoice 模型加载失败（TTS 不可用）: {e}")
 
     yield
     print("服务关闭。")

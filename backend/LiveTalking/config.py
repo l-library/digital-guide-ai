@@ -34,7 +34,7 @@ def parse_args():
                         help="avatar model: musetalk/wav2lip/ultralight")
     parser.add_argument('--avatar_id', type=str, default='wav2lip256_avatar1',
                         help="avatar id in data/avatars")
-    parser.add_argument('--batch_size', type=int, default=16, help="infer batch")
+    parser.add_argument('--batch_size', type=int, default=8, help="infer batch (reduced from 16 for 4GB VRAM)")
     parser.add_argument('--modelres', type=int, default=256)
     parser.add_argument('--modelfile', type=str, default='models/wav2lip.pth')
 

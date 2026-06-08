@@ -5,8 +5,10 @@ chat.py / websocket.py 共用的 TTS 流式播报基础设施。
 """
 
 import asyncio
+import json
 import os
 import re
+import subprocess
 import uuid
 
 from app.services.tts_service import synthesize_to_file
@@ -24,6 +26,34 @@ _tts_queues: dict[str, asyncio.Queue] = {}
 def split_sentences(text: str) -> list[str]:
     """按中文句号/感叹号/问号/换行拆分句子，过滤空串"""
     return [s for s in re.split(r'[。！？\n]+', text) if s.strip()]
+
+
+def get_wav_duration(filepath: str) -> float:
+    """读取 WAV 文件的实际播放时长（秒）。"""
+    # 优先：ffprobe
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "json", filepath],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            data = json.loads(result.stdout)
+            duration = float(data["format"]["duration"])
+            if duration > 0:
+                return duration
+    except Exception as e:
+        print(f"[TTS] ffprobe 获取时长失败: {e}")
+
+    # 回退：soundfile WAV header
+    try:
+        import soundfile as sf
+        return sf.info(filepath).duration
+    except Exception as e:
+        print(f"[TTS] soundfile 获取时长失败: {e}")
+
+    # 最终回退：根据文件大小估算（16-bit mono 22050Hz ≈ 44100 bytes/s）
+    return os.path.getsize(filepath) / 44100.0
 
 
 async def send_audio_to_livetalking(conversation_id: int, audio_filename: str):
@@ -59,8 +89,7 @@ async def _tts_player(stream_id: str, conversation_id: int, queue: asyncio.Queue
             try:
                 await send_audio_to_livetalking(conversation_id, audio_filename)
                 filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
-                file_size = os.path.getsize(filepath)
-                duration = file_size / 5000 + 0.3
+                duration = get_wav_duration(filepath) + 0.1
                 await asyncio.sleep(duration)
             except Exception as e:
                 print(f"[TTS播报失败] stream={stream_id}: {e}")

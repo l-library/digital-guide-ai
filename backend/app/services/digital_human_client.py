@@ -75,10 +75,10 @@ class DigitalHumanClient:
             raise RuntimeError(f"LiveTalking interrupt 失败: {data.get('msg')}")
         return data
 
-    async def send_audio(self, sessionid: str, audio_bytes: bytes, filename: str = "audio.mp3") -> dict:
+    async def send_audio(self, sessionid: str, audio_bytes: bytes, filename: str = "audio.wav") -> dict:
         """上传音频文件到 LiveTalking，驱动口型动画和音视频帧推送"""
         client = await self._get_client()
-        files = {"file": (filename, audio_bytes, "audio/mpeg")}
+        files = {"file": (filename, audio_bytes, "audio/wav")}
         data = {"sessionid": sessionid}
         resp = await client.post("/humanaudio", data=data, files=files)
         resp.raise_for_status()
