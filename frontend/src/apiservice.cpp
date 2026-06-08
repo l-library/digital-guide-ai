@@ -340,6 +340,12 @@ void ApiService::sendAiMessage(int conversationId,
                     emit wsDoneReceived(conversationId, obj["message_id"].toInt(), obj["full_content"].toString(), obj["audio_url"].toString());
                 } else if (type == "title_updated") {
                     emit titleAutoUpdated(obj["conversation_id"].toInt(), obj["title"].toString());
+                } else if (type == "sentence_audio") {
+                    int idx = obj["index"].toInt();
+                    QString text = obj["text"].toString();
+                    QString filename = obj["audio_filename"].toString();
+                    double duration = obj["duration"].toDouble();
+                    emit sentenceAudioReceived(conversationId, idx, text, filename, duration);
                 } else if (type == "error") {
                     emit wsError(obj["message"].toString());
                 }
@@ -402,6 +408,13 @@ void ApiService::connectWebSocket()
             int convId = msg["conversation_id"].toInt();
             QString title = msg["title"].toString();
             emit titleAutoUpdated(convId, title);
+        } else if (type == "sentence_audio") {
+            int convId = msg["conversation_id"].toInt();
+            int idx = msg["index"].toInt();
+            QString text = msg["text"].toString();
+            QString filename = msg["audio_filename"].toString();
+            double duration = msg["duration"].toDouble();
+            emit sentenceAudioReceived(convId, idx, text, filename, duration);
         }
     });
     QObject::connect(m_webSocket, &QWebSocket::errorOccurred, this, [this](QAbstractSocket::SocketError) {
@@ -511,6 +524,12 @@ QHttpPart dhIdPart;
                     emit voiceDoneReceived(conversationId, obj["message_id"].toInt(), obj["full_content"].toString(), obj["audio_url"].toString());
                 } else if (type == "title_updated") {
                     emit titleAutoUpdated(obj["conversation_id"].toInt(), obj["title"].toString());
+                } else if (type == "sentence_audio") {
+                    int idx = obj["index"].toInt();
+                    QString text = obj["text"].toString();
+                    QString filename = obj["audio_filename"].toString();
+                    double duration = obj["duration"].toDouble();
+                    emit sentenceAudioReceived(conversationId, idx, text, filename, duration);
                 } else if (type == "error") {
                     emit voiceError(obj["message"].toString());
                 }
@@ -711,5 +730,20 @@ void ApiService::exportConversation(int conversationId)
 {
     QTimer::singleShot(0, this, [this, conversationId]() {
         emit conversationExported(conversationId, QVariantMap());
+    });
+}
+
+void ApiService::playAudio(int conversationId, const QString &audioFilename)
+{
+    QNetworkRequest request(QUrl(BASE_URL + "/api/v1/play-audio"));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject body;
+    body["conversation_id"] = conversationId;
+    body["audio_filename"] = audioFilename;
+
+    QNetworkReply *reply = m_networkManager->post(request, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [reply]() {
+        reply->deleteLater();
     });
 }

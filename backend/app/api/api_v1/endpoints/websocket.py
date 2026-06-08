@@ -1,17 +1,11 @@
-import asyncio
 import json
-import os
 from datetime import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from app.services.rag_service import retrieve_context, build_prompt
-from app.services.llm_service import generate_stream_async, generate_title_async
-from app.services.tts_service import synthesize_to_file
+from app.services.rag_service import retrieve_context
+from app.services.llm_service import generate_title_async
+from app.services.streaming_utils import build_llm_messages
 from app.services.tts_streaming import (
-    split_sentences,
-    synthesize_and_resolve,
-    enqueue_tts_sync,
-    create_tts_queue,
-    TEMP_AUDIO_DIR,
+    create_streaming_pipeline,
 )
 from app.models import Conversation, Message
 from app.database import SessionLocal
@@ -88,109 +82,25 @@ async def websocket_chat(ws: WebSocket):
                     .all()
                 )
 
-                messages_for_llm = []
-                for m in history_msgs:
-                    messages_for_llm.append({"role": m.role, "content": m.content})
-
                 context_list = retrieve_context(content)
-                prompt_text = build_prompt(content, context_list)
+                messages_for_llm = build_llm_messages(
+                    history_msgs, content, context_list
+                )
 
-                if len(messages_for_llm) <= 2:
-                    messages_for_llm = [{"role": "user", "content": prompt_text}]
-                else:
-                    system_msg = {
-                        "role": "system",
-                        "content": (
-                            "你是一名经验丰富的景区导游。作为一名导游，你需要为用户提供丰富、有趣的旅行体验。"
-                            "核心技能：丰富的旅游知识储备、出色的沟通和表达能力、创意思维和创新能力"
-                            "你的工作准则是提供准确、可靠的旅游信息、尊重不同文化和地区的习俗、以用户为中心，满足个性化需求"
-                            "工作流程：了解用户需求和偏好、引导用户说出自己的需求、提供详细解说和互动、收集用户反馈，持续优化体验"
-                            "沟通风格：保持热情、友好、幽默的态度，让用户感受到愉快的虚拟旅游体验。"
-                            "价值观：尊重文化多样性、提供真实、有价值的旅游信息、注重用户体验，满足个性化需求"
-                            "语气自然亲切。不要使用emoji或动作描写。"
-                            "如果资料中没有相关信息，请如实告知。"
-                        ),
-                    }
-                    context_msg = {
-                        "role": "system",
-                        "content": f"参考景区资料：\n{chr(10).join(context_list)}",
-                    }
-                    history_without_last = messages_for_llm[:-1]
-                    last_user_msg = messages_for_llm[-1]
-                    messages_for_llm = (
-                        [system_msg, context_msg]
-                        + history_without_last
-                        + [last_user_msg]
-                    )
-
-                full_content = ""
-                sentence_buffer = ""
-                stream_id, queue, player_task = create_tts_queue(conversation_id)
                 try:
-                    async for token in generate_stream_async(messages_for_llm):
-                        full_content += token
-                        sentence_buffer += token
-                        if sentence_buffer and sentence_buffer[-1] in "。！？\n":
-                            sentences = split_sentences(sentence_buffer)
-                            for s in sentences:
-                                await send_json(
-                                    {
-                                        "type": "sentence",
-                                        "conversation_id": conversation_id,
-                                        "content": s,
-                                    }
-                                )
-                                if response_type == 1:
-                                    future = enqueue_tts_sync(s, queue)
-                                    asyncio.create_task(synthesize_and_resolve(s, future))
-                            sentence_buffer = ""
-                        await send_json(
-                            {
-                                "type": "token",
-                                "conversation_id": conversation_id,
-                                "content": token,
-                            }
-                        )
-                    if sentence_buffer.strip():
-                        remaining = sentence_buffer.strip()
-                        await send_json(
-                            {
-                                "type": "sentence",
-                                "conversation_id": conversation_id,
-                                "content": remaining,
-                            }
-                        )
-                        if response_type == 1:
-                            future = enqueue_tts_sync(remaining, queue)
-                            asyncio.create_task(synthesize_and_resolve(remaining, future))
-                    if response_type == 1:
-                        await queue.put(None)
-                except Exception as gen_err:
-                    if response_type == 1:
-                        await queue.put(None)
-                    await send_json(
-                        {
-                            "type": "error",
-                            "conversation_id": conversation_id,
-                            "message": f"LLM生成失败: {str(gen_err)}",
-                        }
-                    )
+                    async for event in create_streaming_pipeline(
+                        conversation_id, response_type, messages_for_llm
+                    ):
+                        if event["type"] == "_pipeline_done":
+                            full_content = event["full_content"]
+                            break
+                        await send_json(event)
+                except Exception:
                     db.rollback()
                     db.close()
                     continue
 
                 audio_url = None
-                if response_type == 1:
-                    try:
-                        audio_filename = await synthesize_to_file(
-                            full_content, TEMP_AUDIO_DIR
-                        )
-                        if audio_filename:
-                            audio_url = (
-                                f"/api/v1/download_audio?filename={audio_filename}"
-                            )
-                    except Exception as e:
-                        print(f"[TTS失败] {e}")
 
                 assistant_msg = Message(
                     conversation_id=conversation_id,

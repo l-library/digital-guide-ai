@@ -5,7 +5,7 @@ import os
 
 warnings.filterwarnings("ignore")
 
-_device = "cuda" if torch.cuda.is_available() else "cpu"
+_device = "cpu"
 print(f"[ASR] 语音模块将使用设备: {_device}")
 
 # 模型路径：backend/models

@@ -141,6 +141,7 @@ def build_prompt(query: str, context_list: list[str]) -> str:
 - 语气自然亲切，像真人导游
 - 不要使用emoji或动作描写
 - 如果资料中没有相关信息，请如实告知，不要编造
+- 请用2-3句话简要回答，不超过150字
 
 
 【景区资料】

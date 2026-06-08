@@ -27,7 +27,7 @@ def _get_embeddings() -> HuggingFaceEmbeddings:
     global _embeddings
     if _embeddings is None:
         print("[Knowledge] 正在初始化 BGE Embedding 模型...")
-        DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+        DEVICE = "cpu"
         _embeddings = HuggingFaceEmbeddings(
             model_name=MODEL_PATH,
             model_kwargs={'device': DEVICE},

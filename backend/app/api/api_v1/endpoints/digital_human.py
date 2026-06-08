@@ -34,6 +34,11 @@ class InterruptRequest(BaseModel):
     conversation_id: int
 
 
+class PlayAudioRequest(BaseModel):
+    conversation_id: int
+    audio_filename: str
+
+
 @router.post("/session")
 async def create_session(req: CreateSessionRequest):
     """为 conversation_id 创建数字人会话。"""
@@ -93,6 +98,17 @@ async def interrupt(req: InterruptRequest):
     except httpx.HTTPError:
         return {"code": 500, "message": "数字人服务连接失败"}
     return {"code": 200, "message": "success"}
+
+
+@router.post("/play-audio")
+async def play_audio(req: PlayAudioRequest):
+    """前端调用，将指定 WAV 发送给 LiveTalking 驱动口型动画。
+
+    前端逐句调用此端点，播放顺序由前端 QTimer 控制。
+    """
+    from app.services.tts_streaming import send_audio_to_livetalking
+    await send_audio_to_livetalking(req.conversation_id, req.audio_filename)
+    return {"code": 200, "message": "ok"}
 
 
 @router.get("/status/{conversation_id}")

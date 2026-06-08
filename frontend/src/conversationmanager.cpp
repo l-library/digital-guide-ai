@@ -1,6 +1,7 @@
 #include "conversationmanager.h"
 #include "apiservice.h"
 
+#include <algorithm>
 #include <QDateTime>
 #include <QDebug>
 
@@ -134,6 +135,9 @@ ConversationManager::ConversationManager(QObject *parent)
             loadConversationList(m_currentUserId);
         }
     });
+
+    connect(&api, &ApiService::sentenceAudioReceived,
+            this, &ConversationManager::enqueueSentenceAudio);
 }
 
 int ConversationManager::currentConversationId() const
@@ -171,6 +175,8 @@ void ConversationManager::sendMessage(const QString &text)
     if (text.trimmed().isEmpty())
         return;
 
+    clearAudioQueue();
+
     if (m_pendingNewConversation) {
         m_pendingMessages.append(text.trimmed());
         appendMessage("user", text.trimmed());
@@ -190,6 +196,8 @@ void ConversationManager::sendMessage(const QString &text)
 
 void ConversationManager::sendVoiceMessage(const QString &audioFilePath)
 {
+    clearAudioQueue();
+
     if (m_pendingNewConversation) {
         m_pendingVoiceFilePath = audioFilePath;
         emit messageSending();
@@ -211,6 +219,7 @@ void ConversationManager::loadConversation(int conversationId)
 {
     m_pendingNewConversation = false;
     m_pendingMessages.clear();
+    clearAudioQueue();
     m_currentConversationId = conversationId;
     m_messages.clear();
     m_currentAudioUrl.clear();
@@ -234,6 +243,7 @@ int ConversationManager::startNewConversation(int userId, const QString &title, 
     m_autoLoadPending = false;
     m_pendingKnowledgeDocId = knowledgeDocId;
     m_pendingVoiceFilePath.clear();
+    clearAudioQueue();
     m_messages.clear();
     emit currentConversationChanged();
     emit messagesChanged();
@@ -258,6 +268,7 @@ void ConversationManager::clearCurrentConversation()
     m_autoLoadPending = false;
     m_pendingMessages.clear();
     m_pendingVoiceFilePath.clear();
+    clearAudioQueue();
     m_currentAudioUrl.clear();
     m_ttsPending = false;
     m_currentSentence.clear();
@@ -359,6 +370,11 @@ QString ConversationManager::currentSentence() const
     return m_currentSentence;
 }
 
+bool ConversationManager::playbackActive() const
+{
+    return m_playbackActive;
+}
+
 void ConversationManager::setResponseType(int type)
 {
     m_responseType = type;
@@ -383,4 +399,65 @@ void ConversationManager::setTtsPending(bool pending)
         m_ttsPending = pending;
         emit ttsPendingChanged();
     }
+}
+
+void ConversationManager::enqueueSentenceAudio(int conversationId, int index,
+    const QString &text, const QString &audioFilename, double duration)
+{
+    if (conversationId != m_activeConversationId && m_activeConversationId != 0) {
+        clearAudioQueue();
+    }
+    m_activeConversationId = conversationId;
+
+    SentenceAudioItem item{index, text, audioFilename, duration};
+    m_audioQueue.append(item);
+
+    std::sort(m_audioQueue.begin(), m_audioQueue.end(),
+              [](const SentenceAudioItem &a, const SentenceAudioItem &b) {
+                  return a.index < b.index;
+              });
+
+    qDebug() << "SentenceAudioQueue: enqueued index=" << index
+             << "audio=" << audioFilename << "duration=" << duration;
+
+    // 有待播放的句子且当前未在播放 → 立即启动
+    if (m_currentAudioIndex < m_audioQueue.size() && !m_playbackActive) {
+        playNextSentence();
+    }
+}
+
+void ConversationManager::playNextSentence()
+{
+    if (m_currentAudioIndex >= m_audioQueue.size()) {
+        qDebug() << "SentenceAudioQueue: queue exhausted, waiting for more sentences";
+        m_playbackActive = false;
+        return;
+    }
+
+    if (!m_playbackActive) {
+        m_playbackActive = true;
+        emit playbackActiveChanged();
+    }
+
+    const SentenceAudioItem &item = m_audioQueue.at(m_currentAudioIndex);
+    qDebug() << "SentenceAudioQueue: playing index=" << item.index
+             << "audio=" << item.audioFilename;
+
+    ApiService::instance().playAudio(m_activeConversationId, item.audioFilename);
+
+    int delayMs = static_cast<int>((item.duration + 0.05) * 1000);
+    m_currentAudioIndex++;
+    QTimer::singleShot(delayMs, this, &ConversationManager::playNextSentence);
+}
+
+void ConversationManager::clearAudioQueue()
+{
+    m_audioQueue.clear();
+    m_currentAudioIndex = 0;
+    m_activeConversationId = 0;
+    if (m_playbackActive) {
+        m_playbackActive = false;
+        emit playbackActiveChanged();
+    }
+    qDebug() << "SentenceAudioQueue: cleared";
 }

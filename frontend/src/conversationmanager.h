@@ -2,6 +2,8 @@
 #define CONVERSATIONMANAGER_H
 
 #include <QObject>
+#include <QList>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QStringList>
@@ -18,6 +20,7 @@ class ConversationManager : public QObject
     Q_PROPERTY(QString currentAudioUrl READ currentAudioUrl NOTIFY currentAudioUrlChanged)
     Q_PROPERTY(bool ttsPending READ ttsPending NOTIFY ttsPendingChanged)
     Q_PROPERTY(QString currentSentence READ currentSentence NOTIFY currentSentenceChanged)
+    Q_PROPERTY(bool playbackActive READ playbackActive NOTIFY playbackActiveChanged)
 public:
     explicit ConversationManager(QObject *parent = nullptr);
 
@@ -30,6 +33,7 @@ public:
     QString currentAudioUrl() const;
     bool ttsPending() const;
     QString currentSentence() const;
+    bool playbackActive() const;
 
     Q_INVOKABLE void sendMessage(const QString &text);
     Q_INVOKABLE void sendVoiceMessage(const QString &audioFilePath);
@@ -46,6 +50,13 @@ public:
     Q_INVOKABLE void setResponseType(int type);
     Q_INVOKABLE void setDigitalHumanId(int id);
 
+    Q_INVOKABLE void playNextSentence();
+    Q_INVOKABLE void clearAudioQueue();
+
+public slots:
+    void enqueueSentenceAudio(int conversationId, int index, const QString &text,
+                               const QString &audioFilename, double duration);
+
 signals:
     void currentConversationChanged();
     void messagesChanged();
@@ -56,8 +67,18 @@ signals:
     void currentAudioUrlChanged();
     void ttsPendingChanged();
     void currentSentenceChanged();
+    void allSentencesPlayed();
+    void playbackActiveChanged();
+    void playbackSentenceReady(const QString &sentence);
 
 private:
+    struct SentenceAudioItem {
+        int index;
+        QString text;
+        QString audioFilename;
+        double duration;
+    };
+
     int m_currentConversationId = -1;
     QVariantList m_messages;
     QVariantList m_conversations;
@@ -74,6 +95,11 @@ private:
     QString m_currentAudioUrl;
     bool m_ttsPending = false;
     QString m_currentSentence;
+
+    QList<SentenceAudioItem> m_audioQueue;
+    int m_currentAudioIndex = 0;
+    int m_activeConversationId = 0;
+    bool m_playbackActive = false;
 
     void appendMessage(const QString &role, const QString &content);
     void updateLastAiMessageContent(const QString &token);

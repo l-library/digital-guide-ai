@@ -74,6 +74,16 @@ class CosyVoiceTTS:
 
         print("[CosyVoiceTTS] 模型加载完成")
 
+        # 预热推理：触发 CUDA kernel JIT 编译，避免首次用户请求延迟
+        print("[CosyVoiceTTS] 正在预热推理...")
+        try:
+            self.synthesize("预热。", speaker="中文女")
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            print("[CosyVoiceTTS] 预热完成")
+        except Exception as e:
+            print(f"[CosyVoiceTTS] 预热失败（不影响正常使用）: {e}")
+
     @property
     def is_loaded(self) -> bool:
         return self._model is not None
@@ -146,5 +156,6 @@ class CosyVoiceTTS:
                 print(f"[CosyVoiceTTS] 合成失败: {e}")
                 return False
             finally:
+                # 释放碎片化 CUDA 内存，防止多句合成时 OOM
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()

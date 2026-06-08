@@ -128,6 +128,10 @@ public:
     // Export
     void exportConversation(int conversationId);
 
+    // Audio playback
+public slots:
+    void playAudio(int conversationId, const QString &audioFilename);
+
 signals:
     // Auth
     void loginResult(bool success, QVariantMap userInfo, const QString &error);
@@ -174,6 +178,10 @@ signals:
 
     // Export
     void conversationExported(int conversationId, QVariantMap data);
+
+    // Sentence audio
+    void sentenceAudioReceived(int conversationId, int index, const QString &text,
+                                const QString &audioFilename, double duration);
 
     // Error
     void apiError(const QString &error);

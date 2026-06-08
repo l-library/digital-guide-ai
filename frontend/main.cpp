@@ -39,6 +39,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("digitalHumanManager", &digitalHumanManager);
     engine.rootContext()->setContextProperty("audioPlayer", &audioPlayer);
     engine.rootContext()->setContextProperty("liveTalkingClient", &liveTalkingClient);
+    engine.rootContext()->setContextProperty("apiService", &ApiService::instance());
 
     engine.addImageProvider("livetalking", new LiveTalkingImageProvider(&liveTalkingClient));
 
