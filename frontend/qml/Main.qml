@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
-import QtQuick.Layouts
 
 ApplicationWindow {
     id: appWindow
@@ -9,6 +8,7 @@ ApplicationWindow {
     title: qsTr("数字人导游")
 
     property bool isMobile: Qt.platform.os === "android"
+    property int defaultUserId: 1
     width: isMobile ? 420 : 1024
     height: isMobile ? 760 : 700
     minimumWidth: isMobile ? 360 : 1024
@@ -17,8 +17,6 @@ ApplicationWindow {
     Material.theme: Material.Light
     Material.accent: Material.Blue
     Material.background: "#F5F5F5"
-
-    property bool initialCheckDone: false
 
     StackView {
         id: stackView
@@ -36,24 +34,14 @@ ApplicationWindow {
         }
 
         Component {
-            id: loginPage
-            LoginPage {
-                onLoginSucceeded: {
-                    initAfterLogin()
-                    stackView.replace(chatPage)
-                }
-            }
-        }
-
-        Component {
             id: chatPage
             ChatPage {
                 onNavigateToHistory: {
-                    historyManager.loadHistory(loginManager.currentUser.id)
+                    historyManager.loadHistory(appWindow.defaultUserId)
                     stackView.push(historyPage)
                 }
                 onNavigateToSettings: {
-                    settingsManager.loadSettings(loginManager.currentUser.id)
+                    settingsManager.loadSettings(appWindow.defaultUserId)
                     stackView.push(settingsPage)
                 }
             }
@@ -74,36 +62,12 @@ ApplicationWindow {
             id: settingsPage
             SettingsPage {
                 onNavigateBack: stackView.pop()
-                onLogoutRequested: {
-                    loginManager.logout()
-                    stackView.replace(loginPage)
-                }
-            }
-        }
-    }
-
-    function initAfterLogin() {
-        digitalHumanManager.loadDigitalHumans()
-        var userId = loginManager.currentUser.id
-        conversationManager.autoLoadOrCreateConversation(userId)
-    }
-
-    Connections {
-        target: loginManager
-        function onAutoLoginChecked(loggedIn) {
-            if (!initialCheckDone) {
-                initialCheckDone = true
-                if (loggedIn) {
-                    initAfterLogin()
-                    stackView.replace(chatPage)
-                } else {
-                    stackView.replace(loginPage)
-                }
             }
         }
     }
 
     Component.onCompleted: {
-        loginManager.checkAutoLogin()
+        conversationManager.autoLoadOrCreateConversation(appWindow.defaultUserId)
+        stackView.replace(chatPage)
     }
 }

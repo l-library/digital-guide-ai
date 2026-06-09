@@ -7,6 +7,7 @@ Page {
     id: root
     signal navigateBack()
     signal conversationSelected(int conversationId)
+    property int defaultUserId: 1
 
     header: ToolBar {
         background: Rectangle { color: "#1976D2" }
@@ -55,7 +56,7 @@ Page {
             }
 
             onTextChanged: {
-                historyManager.search(loginManager.currentUser.id, text.trim())
+                historyManager.search(root.defaultUserId, text.trim())
             }
         }
 

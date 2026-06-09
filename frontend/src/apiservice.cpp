@@ -1,6 +1,5 @@
 #include "apiservice.h"
 
-#include <QCryptographicHash>
 #include <QDateTime>
 #include <QFile>
 #include <QHttpMultiPart>
@@ -27,31 +26,6 @@ ApiService::ApiService(QObject *parent)
     , m_networkManager(new QNetworkAccessManager(this))
     , m_webSocket(nullptr)
 {
-    initStubData();
-}
-
-void ApiService::initStubData()
-{
-    QVariantMap dh1, dh2, dh3;
-    dh1["id"] = 1;
-    dh1["name"] = QStringLiteral("小导");
-    dh1["description"] = QStringLiteral("标准导游数字人");
-    dh1["avatarUrl"] = "";
-    dh1["isDefault"] = true;
-
-    dh2["id"] = 2;
-    dh2["name"] = QStringLiteral("小薇");
-    dh2["description"] = QStringLiteral("温柔风格导游");
-    dh2["avatarUrl"] = "";
-    dh2["isDefault"] = false;
-
-    dh3["id"] = 3;
-    dh3["name"] = QStringLiteral("小智");
-    dh3["description"] = QStringLiteral("知识型导游");
-    dh3["avatarUrl"] = "";
-    dh3["isDefault"] = false;
-
-    m_stubDigitalHumans = {dh1, dh2, dh3};
 }
 
 QVariantList ApiService::mapMessagesToFrontendFormat(const QVariantList &items) const
@@ -67,65 +41,6 @@ QVariantList ApiService::mapMessagesToFrontendFormat(const QVariantList &items) 
         result.append(dst);
     }
     return result;
-}
-
-// ==================== Auth (stubs kept for now) ====================
-
-void ApiService::login(const QString &username, const QString &password)
-{
-    QString hash = QString(QCryptographicHash::hash(password.toUtf8(), QCryptographicHash::Sha256).toHex());
-
-    QTimer::singleShot(0, this, [this, username, hash]() {
-        if (username == "admin" && hash == QString(QCryptographicHash::hash(QString("admin123").toUtf8(), QCryptographicHash::Sha256).toHex())) {
-            QVariantMap userInfo;
-            userInfo["id"] = 1;
-            userInfo["username"] = "admin";
-            userInfo["displayName"] = QStringLiteral("管理员");
-            userInfo["avatarUrl"] = "";
-            emit loginResult(true, userInfo, "");
-        } else {
-            emit loginResult(false, QVariantMap(), QStringLiteral("用户名或密码错误"));
-        }
-    });
-}
-
-void ApiService::checkAutoLogin(const QString &token, int userId)
-{
-    QTimer::singleShot(0, this, [this, token, userId]() {
-        if (!token.isEmpty() && userId > 0) {
-            QVariantMap userInfo;
-            userInfo["id"] = userId;
-            userInfo["username"] = "admin";
-            userInfo["displayName"] = QStringLiteral("管理员");
-            userInfo["avatarUrl"] = "";
-            emit autoLoginResult(true, userInfo);
-        } else {
-            emit autoLoginResult(false, QVariantMap());
-        }
-    });
-}
-
-void ApiService::validateToken(const QString &token, int userId)
-{
-    QTimer::singleShot(0, this, [this, token, userId]() {
-        if (!token.isEmpty() && userId > 0) {
-            QVariantMap userInfo;
-            userInfo["id"] = userId;
-            userInfo["username"] = "admin";
-            userInfo["displayName"] = QStringLiteral("管理员");
-            userInfo["avatarUrl"] = "";
-            emit autoLoginResult(true, userInfo);
-        } else {
-            emit autoLoginResult(false, QVariantMap());
-        }
-    });
-}
-
-void ApiService::logout(int)
-{
-    QTimer::singleShot(0, this, [this]() {
-        emit logoutResult(true);
-    });
 }
 
 // ==================== Conversations (real HTTP) ====================
@@ -145,7 +60,7 @@ void ApiService::createConversation(int userId, const QString &title, int knowle
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             qDebug() << "createConversation error:" << reply->errorString();
-            emit apiError("创建对话失败");
+            emit apiError(QStringLiteral("创建对话失败"));
             return;
         }
         QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
@@ -166,7 +81,7 @@ void ApiService::loadConversations(int userId)
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             qDebug() << "loadConversations error:" << reply->errorString();
-            emit apiError("加载对话列表失败");
+            emit apiError(QStringLiteral("加载对话列表失败"));
             return;
         }
         QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
@@ -200,7 +115,7 @@ void ApiService::loadConversationsGroupedByDate(int userId)
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             qDebug() << "loadConversationsGroupedByDate error:" << reply->errorString();
-            emit apiError("加载分组对话失败");
+            emit apiError(QStringLiteral("加载分组对话失败"));
             return;
         }
         QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
@@ -259,7 +174,7 @@ void ApiService::renameConversation(int conversationId, const QString &newTitle)
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             qDebug() << "renameConversation error:" << reply->errorString();
-            emit apiError("重命名对话失败");
+            emit apiError(QStringLiteral("重命名对话失败"));
             return;
         }
         emit conversationRenamed(conversationId, newTitle);
@@ -299,11 +214,10 @@ void ApiService::loadMessages(int conversationId)
 
 void ApiService::sendAiMessage(int conversationId,
                                 const QString &userMessage,
-                                int digitalHumanId,
                                 int response_type)
 {
     if (m_webSocket && m_webSocket->state() == QAbstractSocket::ConnectedState) {
-        sendChatViaWebSocket(conversationId, userMessage, digitalHumanId, response_type);
+        sendChatViaWebSocket(conversationId, userMessage, response_type);
         return;
     }
 
@@ -314,7 +228,7 @@ void ApiService::sendAiMessage(int conversationId,
     body["conversation_id"] = conversationId;
     body["content"] = userMessage;
     body["response_type"] = response_type;
-    body["digital_human_id"] = digitalHumanId;
+    body["digital_human_id"] = 1;
 
     m_streamReply = m_networkManager->post(req, QJsonDocument(body).toJson());
 
@@ -441,7 +355,7 @@ bool ApiService::isWebSocketConnected() const
     return m_webSocket && m_webSocket->state() == QAbstractSocket::ConnectedState;
 }
 
-void ApiService::sendChatViaWebSocket(int conversationId, const QString &content, int digitalHumanId, int responseType)
+void ApiService::sendChatViaWebSocket(int conversationId, const QString &content, int responseType)
 {
     if (!m_webSocket || m_webSocket->state() != QAbstractSocket::ConnectedState) {
         emit wsError(QStringLiteral("WebSocket 未连接"));
@@ -451,14 +365,14 @@ void ApiService::sendChatViaWebSocket(int conversationId, const QString &content
     msg["type"] = "chat_message";
     msg["conversation_id"] = conversationId;
     msg["content"] = content;
-    msg["digital_human_id"] = digitalHumanId;
+    msg["digital_human_id"] = 1;
     msg["response_type"] = responseType;
     m_webSocket->sendTextMessage(QString(QJsonDocument(msg).toJson(QJsonDocument::Compact)));
 }
 
 // ==================== Voice streaming SSE ====================
 
-void ApiService::sendVoiceMessage(int conversationId, const QString &audioFilePath, int digitalHumanId, int responseType)
+void ApiService::sendVoiceMessage(int conversationId, const QString &audioFilePath, int responseType)
 {
     QFile *file = new QFile(audioFilePath);
     if (!file->open(QIODevice::ReadOnly)) {
@@ -481,11 +395,6 @@ void ApiService::sendVoiceMessage(int conversationId, const QString &audioFilePa
                          QVariant(QStringLiteral("form-data; name=\"conversation_id\"")));
     convIdPart.setBody(QString::number(conversationId).toUtf8());
 
-QHttpPart dhIdPart;
-    dhIdPart.setHeader(QNetworkRequest::ContentDispositionHeader,
-                        QVariant(QStringLiteral("form-data; name=\"digital_human_id\"")));
-    dhIdPart.setBody(QString::number(digitalHumanId).toUtf8());
-
     QHttpPart rtPart;
     rtPart.setHeader(QNetworkRequest::ContentDispositionHeader,
                       QVariant(QStringLiteral("form-data; name=\"response_type\"")));
@@ -493,7 +402,6 @@ QHttpPart dhIdPart;
 
     multiPart->append(audioPart);
     multiPart->append(convIdPart);
-    multiPart->append(dhIdPart);
     multiPart->append(rtPart);
 
     QNetworkRequest req(QUrl(BASE_URL + "/api/v1/chat/voice_stream"));
@@ -551,8 +459,6 @@ QHttpPart dhIdPart;
     });
 }
 
-// ==================== Knowledge docs (real HTTP) ====================
-
 void ApiService::uploadKnowledgeDoc(int userId, const QString &title, const QString &filePath, const QString &)
 {
     QFile *file = new QFile(filePath);
@@ -564,7 +470,6 @@ void ApiService::uploadKnowledgeDoc(int userId, const QString &title, const QStr
 
     QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
 
-    // file 字段
     QHttpPart filePart;
     filePart.setHeader(QNetworkRequest::ContentDispositionHeader,
                        QVariant(QStringLiteral("form-data; name=\"file\"; filename=\"%1\"").arg(title)));
@@ -572,13 +477,11 @@ void ApiService::uploadKnowledgeDoc(int userId, const QString &title, const QStr
     filePart.setBodyDevice(file);
     file->setParent(multiPart);
 
-    // title 字段
     QHttpPart titlePart;
     titlePart.setHeader(QNetworkRequest::ContentDispositionHeader,
                         QVariant(QStringLiteral("form-data; name=\"title\"")));
     titlePart.setBody(title.toUtf8());
 
-    // user_id 字段
     QHttpPart userIdPart;
     userIdPart.setHeader(QNetworkRequest::ContentDispositionHeader,
                          QVariant(QStringLiteral("form-data; name=\"user_id\"")));
@@ -603,7 +506,6 @@ void ApiService::uploadKnowledgeDoc(int userId, const QString &title, const QStr
         QJsonObject resp = QJsonDocument::fromJson(responseData).object();
         qDebug() << "uploadKnowledgeDoc response:" << responseData;
 
-        // 兼容两种响应格式：直接返回数据 或 包在 data 字段中
         int docId = 0;
         if (resp.contains("doc_id")) {
             docId = resp["doc_id"].toInt();
@@ -648,7 +550,6 @@ void ApiService::loadKnowledgeDocs(int)
         QJsonObject resp = QJsonDocument::fromJson(responseData).object();
         qDebug() << "loadKnowledgeDocs response:" << responseData;
 
-        // 兼容两种响应格式
         QJsonArray items;
         if (resp.contains("items")) {
             items = resp["items"].toArray();
@@ -673,27 +574,6 @@ void ApiService::loadKnowledgeDocs(int)
     });
 }
 
-// ==================== Digital humans (stubs) ====================
-
-void ApiService::loadDigitalHumans()
-{
-    QTimer::singleShot(0, this, [this]() {
-        emit digitalHumansLoaded(m_stubDigitalHumans);
-    });
-}
-
-void ApiService::setDefaultDigitalHuman(int dhId)
-{
-    for (auto &dh : m_stubDigitalHumans) {
-        QVariantMap dhm = dh.toMap();
-        dhm["isDefault"] = (dhm["id"].toInt() == dhId);
-        dh = dhm;
-    }
-    QTimer::singleShot(0, this, [this]() {
-        emit defaultDigitalHumanSet(true);
-    });
-}
-
 void ApiService::registerLiveTalkingSession(int conversationId, const QString &sessionId)
 {
     QUrl url(BASE_URL + "/api/v1/digital-human/register_session");
@@ -706,31 +586,6 @@ void ApiService::registerLiveTalkingSession(int conversationId, const QString &s
 
     m_networkManager->post(req, QJsonDocument(body).toJson());
     qDebug() << "ApiService: 注册 LiveTalking session, conversation_id=" << conversationId << "session_id=" << sessionId;
-}
-
-// ==================== Settings (stubs) ====================
-
-void ApiService::getSetting(const QString &key)
-{
-    QTimer::singleShot(0, this, [this, key]() {
-        emit settingLoaded(key, "");
-    });
-}
-
-void ApiService::setSetting(const QString &, const QString &)
-{
-    QTimer::singleShot(0, this, [this]() {
-        emit settingSaved(true);
-    });
-}
-
-// ==================== Export (stub) ====================
-
-void ApiService::exportConversation(int conversationId)
-{
-    QTimer::singleShot(0, this, [this, conversationId]() {
-        emit conversationExported(conversationId, QVariantMap());
-    });
 }
 
 void ApiService::playAudio(int conversationId, const QString &audioFilename)

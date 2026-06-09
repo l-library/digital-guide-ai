@@ -82,12 +82,6 @@ class ApiService : public QObject
 public:
     static ApiService &instance();
 
-    // Auth
-    void login(const QString &username, const QString &password);
-    void checkAutoLogin(const QString &token, int userId);
-    void logout(int userId);
-    void validateToken(const QString &token, int userId);
-
     // Conversations
     void createConversation(int userId, const QString &title, int knowledgeDocId = -1);
     void loadConversations(int userId);
@@ -99,45 +93,27 @@ public:
     // Messages
     void sendAiMessage(int conversationId,
                        const QString &userMessage,
-                       int digitalHumanId,
                        int response_type);
 
     // WebSocket streaming chat
     void connectWebSocket();
     void disconnectWebSocket();
     bool isWebSocketConnected() const;
-    void sendChatViaWebSocket(int conversationId, const QString &content, int digitalHumanId = 0, int responseType = 0);
+    void sendChatViaWebSocket(int conversationId, const QString &content, int responseType = 0);
 
     // Voice streaming (upload audio + parse SSE)
-    void sendVoiceMessage(int conversationId, const QString &audioFilePath, int digitalHumanId = 0, int responseType = 1);
+    void sendVoiceMessage(int conversationId, const QString &audioFilePath, int responseType = 1);
 
-    // Knowledge docs
+    void registerLiveTalkingSession(int conversationId, const QString &sessionId);
+
     void uploadKnowledgeDoc(int userId, const QString &title, const QString &filePath, const QString &content);
     void deleteKnowledgeDoc(int docId);
     void loadKnowledgeDocs(int userId);
 
-    // Digital humans
-    void loadDigitalHumans();
-    void setDefaultDigitalHuman(int dhId);
-    void registerLiveTalkingSession(int conversationId, const QString &sessionId);
-
-    // Settings
-    void getSetting(const QString &key);
-    void setSetting(const QString &key, const QString &value);
-
-    // Export
-    void exportConversation(int conversationId);
-
-    // Audio playback
 public slots:
     void playAudio(int conversationId, const QString &audioFilename);
 
 signals:
-    // Auth
-    void loginResult(bool success, QVariantMap userInfo, const QString &error);
-    void autoLoginResult(bool loggedIn, QVariantMap userInfo);
-    void logoutResult(bool success);
-
     // Conversations
     void conversationCreated(int conversationId);
     void conversationsLoaded(QVariantList conversations);
@@ -146,8 +122,6 @@ signals:
     void conversationRenamed(int conversationId, const QString &newTitle);
     void titleAutoUpdated(int conversationId, const QString &newTitle);
     void messagesLoaded(QVariantList messages, int conversationId);
-    void messageAdded(int messageId, int conversationId);
-    void aiResponseReceived(int conversationId, const QString &response, const QString &role);
 
     // WebSocket streaming
     void wsConnected();
@@ -163,27 +137,14 @@ signals:
     void voiceDoneReceived(int conversationId, int messageId, const QString &fullContent, const QString &audioUrl);
     void voiceError(const QString &message);
 
-    // Knowledge docs
-    void knowledgeDocUploaded(int docId);
-    void knowledgeDocDeleted(bool success);
-    void knowledgeDocsLoaded(QVariantList docs);
-
-    // Digital humans
-    void digitalHumansLoaded(QVariantList digitalHumans);
-    void defaultDigitalHumanSet(bool success);
-
-    // Settings
-    void settingLoaded(const QString &key, const QString &value);
-    void settingSaved(bool success);
-
-    // Export
-    void conversationExported(int conversationId, QVariantMap data);
-
     // Sentence audio
     void sentenceAudioReceived(int conversationId, int index, const QString &text,
                                 const QString &audioFilename, double duration);
 
-    // Error
+    void knowledgeDocUploaded(int docId);
+    void knowledgeDocDeleted(bool success);
+    void knowledgeDocsLoaded(QVariantList docs);
+
     void apiError(const QString &error);
 
 private:
@@ -198,9 +159,7 @@ private:
     QNetworkReply *m_voiceStreamReply = nullptr;
     QByteArray m_sseBuffer;
     QByteArray m_voiceSseBuffer;
-    QVariantList m_stubDigitalHumans;
 
-    void initStubData();
     QVariantList mapMessagesToFrontendFormat(const QVariantList &items) const;
 };
 

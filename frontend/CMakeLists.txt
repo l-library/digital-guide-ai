@@ -20,12 +20,10 @@ qt_add_executable(appdigital_guide_ai
     main.cpp
     ${APP_ICON_RESOURCE_WINDOWS}
     src/apiservice.cpp
-    src/loginmanager.cpp
     src/conversationmanager.cpp
     src/historymanager.cpp
     src/settingsmanager.cpp
     src/voiceinterface.cpp
-    src/digitalhumanmanager.cpp
     src/audioplayer.cpp
     src/livetalkingclient.cpp
     res.qrc
@@ -36,16 +34,15 @@ qt_add_qml_module(appdigital_guide_ai
     VERSION 1.0
     QML_FILES
         qml/Main.qml
-        qml/LoginPage.qml
         qml/ChatPage.qml
         qml/HistoryPage.qml
         qml/SettingsPage.qml
         qml/components/MessageBubble.qml
         qml/components/DigitalHumanView.qml
 
-        SOURCES src/apiservice.cpp src/apiservice.h src/conversationmanager.cpp src/conversationmanager.h src/digitalhumanmanager.cpp src/digitalhumanmanager.h src/historymanager.cpp src/historymanager.h src/loginmanager.cpp src/loginmanager.h src/settingsmanager.cpp src/settingsmanager.h src/voiceinterface.cpp src/voiceinterface.h src/audioplayer.cpp src/audioplayer.h src/livetalkingclient.cpp src/livetalkingclient.h
+        SOURCES src/apiservice.cpp src/apiservice.h src/conversationmanager.cpp src/conversationmanager.h src/historymanager.cpp src/historymanager.h src/settingsmanager.cpp src/settingsmanager.h src/voiceinterface.cpp src/voiceinterface.h src/audioplayer.cpp src/audioplayer.h src/livetalkingclient.cpp src/livetalkingclient.h
         QML_FILES
-)
+    )
 
 set_target_properties(appdigital_guide_ai PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER com.digitalguide.ai

@@ -7,7 +7,6 @@ import QtQuick.Dialogs
 Page {
     id: root
     signal navigateBack()
-    signal logoutRequested()
 
     header: ToolBar {
         Material.background: Material.color(Material.Blue, Material.Shade700)
@@ -54,132 +53,6 @@ Page {
             Item { width: 1; height: 8 }
 
             GroupBox {
-                title: qsTr("个人信息")
-                Layout.fillWidth: true
-                Material.elevation: 2
-
-                ColumnLayout {
-                    width: parent.width
-                    spacing: 8
-
-                    RowLayout {
-                        spacing: 12
-
-                        Rectangle {
-                            width: 48; height: 48; radius: 24
-                            color: Material.color(Material.Blue, Material.Shade200)
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: settingsManager.userInfo.displayName
-                                      ? settingsManager.userInfo.displayName.charAt(0) : "?"
-                                font.pixelSize: 22
-                                font.bold: true
-                                color: "white"
-                            }
-                        }
-
-                        ColumnLayout {
-                            spacing: 2
-                            Label {
-                                text: settingsManager.userInfo.displayName || qsTr("未知用户")
-                                font.pixelSize: 16
-                                font.bold: true
-                            }
-                            Label {
-                                text: settingsManager.userInfo.username || ""
-                                font.pixelSize: 13
-                                color: "#999"
-                            }
-                        }
-                    }
-                }
-            }
-
-            GroupBox {
-                title: qsTr("数字人选择")
-                Layout.fillWidth: true
-                Material.elevation: 2
-
-                ColumnLayout {
-                    width: parent.width
-                    spacing: 4
-
-                    Repeater {
-                        model: settingsManager.digitalHumans
-                        delegate: ItemDelegate {
-                            Layout.fillWidth: true
-                            height: 48
-
-                            onClicked: {
-                                if (modelData.id !== settingsManager.currentDigitalHumanId) {
-                                    settingsManager.switchDigitalHuman(modelData.id)
-                                }
-                            }
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 8
-                                spacing: 12
-
-                                Rectangle {
-                                    width: 36; height: 36; radius: 18
-                                    Layout.alignment: Qt.AlignLeft
-                                    color: modelData.id === settingsManager.currentDigitalHumanId
-                                           ? Material.accent : Material.color(Material.Grey, Material.Shade300)
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: modelData.name.charAt(0)
-                                        font.pixelSize: 16
-                                        font.bold: true
-                                        color: "white"
-                                    }
-                                }
-
-                                ColumnLayout {
-                                    spacing: 2
-                                    Layout.fillWidth: true
-                                    Layout.minimumWidth: 100
-                                    Label {
-                                        text: modelData.name
-                                        font.pixelSize: 15
-                                        font.bold: true
-                                    }
-                                    Label {
-                                        text: modelData.description || ""
-                                        font.pixelSize: 12
-                                        color: "#999"
-                                    }
-                                }
-
-                                // 自定义指示器
-                                Rectangle {
-                                    width: 20
-                                    height: 20
-                                    radius: 10
-                                    border.width: 1
-                                    border.color: modelData.id === settingsManager.currentDigitalHumanId
-                                                  ? Material.accent : "#999"
-                                    color: "transparent"
-                                    Layout.alignment: Qt.AlignRight
-
-                                    Rectangle {
-                                        width: 12
-                                        height: 12
-                                        radius: width/2
-                                        anchors.centerIn: parent
-                                        visible: modelData.id === settingsManager.currentDigitalHumanId
-                                        color: Material.accent
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            GroupBox {
                 title: qsTr("知识库管理")
                 Layout.fillWidth: true
                 Material.elevation: 2
@@ -207,7 +80,7 @@ Page {
                             spacing: 8
 
                             Text {
-                                text: "📄"
+                                text: "\u{1F4C4}"
                                 font.pixelSize: 16
                             }
 
@@ -219,7 +92,7 @@ Page {
                             }
 
                             ToolButton {
-                                text: qsTr("✕")
+                                text: qsTr("\u2715")
                                 font.pixelSize: 14
                                 Material.foreground: Material.Red
                                 onClicked: {
@@ -240,57 +113,29 @@ Page {
             }
 
             GroupBox {
-                title: qsTr("其他")
+                title: qsTr("关于")
                 Layout.fillWidth: true
                 Material.elevation: 2
 
                 ColumnLayout {
                     width: parent.width
-                    spacing: 0
+                    spacing: 8
 
-                    ItemDelegate {
-                        Layout.fillWidth: true
-                        text: qsTr("数据大屏")
-                        icon.source: "qrc:/asset/data.png"
-                        font.pixelSize: 14
-                        onClicked: settingsManager.openDataDashboard()
+                    Label {
+                        text: qsTr("数字人导游")
+                        font.pixelSize: 18
+                        font.bold: true
                     }
 
-                    Rectangle {
+                    Label {
+                        text: qsTr("基于 AI 数字人技术的智能景区导览系统")
+                        font.pixelSize: 13
+                        color: "#666"
+                        wrapMode: Text.WordWrap
                         Layout.fillWidth: true
-                        height: 1
-                        color: "#E0E0E0"
-                    }
-
-                    ItemDelegate {
-                        Layout.fillWidth: true
-                        text: qsTr("退出登录")
-                        icon.source: "qrc:/asset/exit.png"
-                        font.pixelSize: 14
-                        Material.foreground: Material.Red
-                        onClicked: {
-                            logoutConfirmDialog.open()
-                        }
                     }
                 }
             }
-        }
-    }
-
-    Dialog {
-        id: logoutConfirmDialog
-        title: qsTr("确认退出")
-        standardButtons: Dialog.Yes | Dialog.No
-        modal: true
-        anchors.centerIn: parent
-
-        Label {
-            text: qsTr("确定要退出登录吗？")
-            font.pixelSize: 14
-        }
-
-        onAccepted: {
-            root.logoutRequested()
         }
     }
 
@@ -301,8 +146,7 @@ Page {
         nameFilters: ["文档文件 (*.txt *.md *.pdf *.docx)", "所有文件 (*)"]
 
         onAccepted: {
-            var userId = loginManager.currentUser.id
-            settingsManager.uploadKnowledgeDoc(userId, selectedFile.toString().replace("file://", ""))
+            settingsManager.uploadKnowledgeDoc(1, selectedFile.toString().replace("file://", ""))
         }
     }
 }

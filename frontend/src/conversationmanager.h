@@ -48,7 +48,6 @@ public:
     Q_INVOKABLE void disconnectWebSocket();
 
     Q_INVOKABLE void setResponseType(int type);
-    Q_INVOKABLE void setDigitalHumanId(int id);
 
     Q_INVOKABLE void playNextSentence();
     Q_INVOKABLE void clearAudioQueue();
@@ -85,7 +84,6 @@ private:
     QString m_currentTitle;
     int m_currentUserId = -1;
     int m_responseType = 1;
-    int m_digitalHumanId = 1;
     bool m_streaming = false;
     bool m_pendingNewConversation = false;
     bool m_autoLoadPending = false;

@@ -8,6 +8,7 @@ Page {
     id: root
     signal navigateToHistory()
     signal navigateToSettings()
+    property int defaultUserId: 1
 
     property string inputMode: "text"
     property string outputMode: "digitHuman"
@@ -15,9 +16,6 @@ Page {
     property string ttsStatus: ""
 
     Component.onCompleted: {
-        if (digitalHumanManager && digitalHumanManager.currentDigitalHuman && conversationManager) {
-            conversationManager.setDigitalHumanId(digitalHumanManager.currentDigitalHuman.id)
-        }
         if (conversationManager) {
             conversationManager.setResponseType(root.outputMode === "digitHuman" ? 1 : 0)
         }
@@ -55,7 +53,7 @@ Page {
             ToolButton {
                 icon.source: "qrc:/asset/menu.png"
                 onClicked: {
-                    conversationManager.loadConversationList(loginManager.currentUser.id)
+                    conversationManager.loadConversationList(root.defaultUserId)
                     drawer.open()
                 }
             }
@@ -75,43 +73,6 @@ Page {
                     onClicked: {
                         if (conversationManager && conversationManager.hasConversation) {
                             renameDialog.open()
-                        }
-                    }
-                }
-            }
-
-            Rectangle {
-                width: 32
-                height: 32
-                radius: width / 2
-                clip: true
-                antialiasing: true
-
-                Image {
-                    anchors.fill: parent
-                    source: "qrc:/asset/avatar.jpeg"
-                    fillMode: Image.PreserveAspectCrop
-                    smooth: true
-                }
-            }
-
-            Label {
-                text: digitalHumanManager ? digitalHumanManager.currentName : ""
-                font.pixelSize: 13
-                opacity: 0.9
-                visible: digitalHumanManager && digitalHumanManager.currentName !== ""
-                color: "white"
-            }
-
-            ToolButton {
-                icon.source: "qrc:/asset/exchange.png"
-                onClicked: {
-                    if (digitalHumanManager && digitalHumanManager.digitalHumans.length > 0) {
-                        digitalHumanManager.switchTo(
-                            (digitalHumanManager.currentIndex + 1) % Math.max(digitalHumanManager.digitalHumans.length, 1))
-                        var dh = digitalHumanManager.currentDigitalHuman
-                        if (dh && conversationManager) {
-                            conversationManager.setDigitalHumanId(dh.id)
                         }
                     }
                 }
@@ -161,9 +122,7 @@ Page {
 
                 onClicked: {
                     drawer.close()
-                    if (loginManager && loginManager.currentUser) {
-                        conversationManager.startNewConversation(loginManager.currentUser.id, "新对话")
-                    }
+                    conversationManager.startNewConversation(root.defaultUserId, "新对话")
                 }
             }
 
@@ -750,7 +709,7 @@ Page {
                     spacing: 8
                     visible: root.inputMode === "voice"
 
-Button {
+                    Button {
                         icon.source: "qrc:/asset/text.png"
                         font.pixelSize: 12
                         flat: true

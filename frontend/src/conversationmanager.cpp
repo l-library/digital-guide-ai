@@ -9,14 +9,6 @@ ConversationManager::ConversationManager(QObject *parent)
     : QObject(parent)
 {
     auto &api = ApiService::instance();
-    connect(&api, &ApiService::messageAdded, this, [this](int, int) {
-        emit messagesChanged();
-    });
-    connect(&api, &ApiService::aiResponseReceived, this, [this](int conversationId, const QString &response, const QString &role) {
-        if (conversationId != m_currentConversationId)
-            return;
-        appendMessage(role, response);
-    });
     connect(&api, &ApiService::messagesLoaded, this, [this](QVariantList messages, int conversationId) {
         if (conversationId != m_currentConversationId && conversationId != 0)
             return;
@@ -30,12 +22,12 @@ ConversationManager::ConversationManager(QObject *parent)
 
         if (!m_pendingMessages.isEmpty()) {
             QString msgText = m_pendingMessages.takeFirst();
-            ApiService::instance().sendAiMessage(m_currentConversationId, msgText, m_digitalHumanId, m_responseType);
+            ApiService::instance().sendAiMessage(m_currentConversationId, msgText, m_responseType);
         } else if (!m_pendingVoiceFilePath.isEmpty()) {
             QString filePath = m_pendingVoiceFilePath;
             m_pendingVoiceFilePath.clear();
             qDebug() << "ConversationManager: 对话创建完成，发送暂存语音:" << filePath;
-            ApiService::instance().sendVoiceMessage(m_currentConversationId, filePath, m_digitalHumanId, m_responseType);
+            ApiService::instance().sendVoiceMessage(m_currentConversationId, filePath, m_responseType);
         }
 
         emit messagesChanged();
@@ -191,7 +183,7 @@ void ConversationManager::sendMessage(const QString &text)
 
     appendMessage("user", text.trimmed());
 
-    ApiService::instance().sendAiMessage(m_currentConversationId, text.trimmed(), m_digitalHumanId, m_responseType);
+    ApiService::instance().sendAiMessage(m_currentConversationId, text.trimmed(), m_responseType);
 }
 
 void ConversationManager::sendVoiceMessage(const QString &audioFilePath)
@@ -212,7 +204,7 @@ void ConversationManager::sendVoiceMessage(const QString &audioFilePath)
     emit messageSending();
 
     qDebug() << "ConversationManager::sendVoiceMessage: 发送语音到对话" << m_currentConversationId;
-    ApiService::instance().sendVoiceMessage(m_currentConversationId, audioFilePath, m_digitalHumanId, m_responseType);
+    ApiService::instance().sendVoiceMessage(m_currentConversationId, audioFilePath, m_responseType);
 }
 
 void ConversationManager::loadConversation(int conversationId)
@@ -378,11 +370,6 @@ bool ConversationManager::playbackActive() const
 void ConversationManager::setResponseType(int type)
 {
     m_responseType = type;
-}
-
-void ConversationManager::setDigitalHumanId(int id)
-{
-    m_digitalHumanId = id;
 }
 
 void ConversationManager::setCurrentAudioUrl(const QString &url)

@@ -2,12 +2,8 @@
     <qresource prefix="/">
         <file>asset/avatar.jpeg</file>
         <file>asset/upload.png</file>
-        <file>asset/data.png</file>
-        <file>asset/exchange.png</file>
-        <file>asset/exit.png</file>
         <file>asset/new.png</file>
         <file>asset/menu.png</file>
-        <file>asset/failure.png</file>
         <file>asset/history.png</file>
         <file>asset/setting.png</file>
         <file>asset/text.png</file>

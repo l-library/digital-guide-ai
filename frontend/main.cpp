@@ -5,12 +5,10 @@
 #include <QQuickImageProvider>
 
 #include "src/apiservice.h"
-#include "src/loginmanager.h"
 #include "src/conversationmanager.h"
 #include "src/historymanager.h"
 #include "src/settingsmanager.h"
 #include "src/voiceinterface.h"
-#include "src/digitalhumanmanager.h"
 #include "src/audioplayer.h"
 #include "src/livetalkingclient.h"
 
@@ -21,22 +19,18 @@ int main(int argc, char *argv[])
 
     ApiService::instance();
 
-    LoginManager loginManager;
     ConversationManager conversationManager;
     HistoryManager historyManager;
     SettingsManager settingsManager;
     VoiceInterface voiceInterface;
-    DigitalHumanManager digitalHumanManager;
     AudioPlayer audioPlayer;
     LiveTalkingClient liveTalkingClient;
 
     QQmlApplicationEngine engine;
-    engine.rootContext()->setContextProperty("loginManager", &loginManager);
     engine.rootContext()->setContextProperty("conversationManager", &conversationManager);
     engine.rootContext()->setContextProperty("historyManager", &historyManager);
     engine.rootContext()->setContextProperty("settingsManager", &settingsManager);
     engine.rootContext()->setContextProperty("voiceInterface", &voiceInterface);
-    engine.rootContext()->setContextProperty("digitalHumanManager", &digitalHumanManager);
     engine.rootContext()->setContextProperty("audioPlayer", &audioPlayer);
     engine.rootContext()->setContextProperty("liveTalkingClient", &liveTalkingClient);
     engine.rootContext()->setContextProperty("apiService", &ApiService::instance());
