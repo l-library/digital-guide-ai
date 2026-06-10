@@ -21,8 +21,16 @@ os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
 
 
 def split_sentences(text: str) -> list[str]:
-    """按中文句号/感叹号/问号/换行拆分句子，过滤空串"""
-    return [s for s in re.split(r'[。！？\n]+', text) if s.strip()]
+    """按中文标点拆分句子，过滤空串，合并过短片段避免 TTS 质量下降"""
+    raw = [s.strip() for s in re.split(r'[。！？\n，；、：]+', text) if s.strip()]
+    merged: list[str] = []
+    for s in raw:
+        # 2 字及以下的片段合并到前一句，避免 TTS 合成质量差
+        if merged and len(s) <= 2:
+            merged[-1] = merged[-1] + s
+        else:
+            merged.append(s)
+    return merged
 
 
 def get_wav_duration(filepath: str) -> float:

@@ -432,7 +432,9 @@ void ConversationManager::playNextSentence()
 
     ApiService::instance().playAudio(m_activeConversationId, item.audioFilename);
 
-    int delayMs = static_cast<int>((item.duration + 0.05) * 1000);
+    int delayMs = static_cast<int>(item.duration * 1000);
+    // 提前 50ms 播下一句，掩盖短句切换间隙（细粒度拆分后句子变短，间隙更明显）
+    if (delayMs > 200) delayMs -= 50;
     m_currentAudioIndex++;
     QTimer::singleShot(delayMs, this, &ConversationManager::playNextSentence);
 }

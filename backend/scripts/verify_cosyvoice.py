@@ -13,8 +13,13 @@ import sys
 import time
 
 # CosyVoice 和 Matcha-TTS 依赖路径
-sys.path.insert(0, os.getenv('COSYVOICE_DIR', '/home/liborui/CosyVoice'))
-sys.path.insert(0, os.getenv('COSYVOICE_MATCHA_DIR', '/home/liborui/CosyVoice/third_party/Matcha-TTS'))
+_cosyvoice_dir = os.getenv('COSYVOICE_DIR')
+if not _cosyvoice_dir:
+    print("[错误] 请设置 COSYVOICE_DIR 环境变量指向 CosyVoice 仓库根目录")
+    sys.exit(1)
+sys.path.insert(0, _cosyvoice_dir)
+sys.path.insert(0, os.getenv('COSYVOICE_MATCHA_DIR',
+    os.path.join(_cosyvoice_dir, 'third_party', 'Matcha-TTS')))
 
 import torch
 import torchaudio

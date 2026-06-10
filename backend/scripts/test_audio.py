@@ -17,8 +17,10 @@ async def main():
     print("="*50)
 
     # 初始化 TTS 模型
-    model_dir = os.getenv("COSYVOICE_MODEL_DIR",
-        "/home/liborui/CosyVoice/pretrained_models/CosyVoice-300M-SFT")
+    model_dir = os.getenv("COSYVOICE_MODEL_DIR")
+    if not model_dir:
+        print("[错误] 请设置 COSYVOICE_MODEL_DIR 环境变量")
+        sys.exit(1)
     print(f"[初始化] 加载 CosyVoice 模型: {model_dir}")
     init_tts_model(model_dir)
     

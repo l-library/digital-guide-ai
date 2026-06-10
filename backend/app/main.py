@@ -35,14 +35,16 @@ async def lifespan(app: FastAPI):
     print("ASR服务就绪。")
 
     print("正在预热TTS服务，加载CosyVoice模型...")
-    from app.services.tts_service import init_tts_model
-    cosyvoice_dir = os.getenv("COSYVOICE_MODEL_DIR",
-        "/home/liborui/CosyVoice/pretrained_models/CosyVoice-300M-SFT")
-    try:
-        init_tts_model(cosyvoice_dir)
-        print("CosyVoice 模型加载完成")
-    except Exception as e:
-        print(f"[启动] CosyVoice 模型加载失败（TTS 不可用）: {e}")
+    cosyvoice_model_dir = os.getenv("COSYVOICE_MODEL_DIR")
+    if cosyvoice_model_dir:
+        from app.services.tts_service import init_tts_model
+        try:
+            init_tts_model(cosyvoice_model_dir)
+            print("CosyVoice 模型加载完成")
+        except Exception as e:
+            print(f"[启动] CosyVoice 模型加载失败（TTS 不可用）: {e}")
+    else:
+        print("[启动] 未设置 COSYVOICE_MODEL_DIR 环境变量，跳过 TTS 模型加载")
 
     yield
     print("服务关闭。")

@@ -12,8 +12,9 @@ import sys
 import torch
 import torchaudio
 
-COSYVOICE_DIR = os.getenv("COSYVOICE_DIR", "/home/liborui/CosyVoice")
-MATCHA_TTS_DIR = os.getenv("COSYVOICE_MATCHA_DIR", os.path.join(COSYVOICE_DIR, "third_party/Matcha-TTS"))
+COSYVOICE_DIR = os.getenv("COSYVOICE_DIR")
+MATCHA_TTS_DIR = os.getenv("COSYVOICE_MATCHA_DIR",
+    os.path.join(COSYVOICE_DIR, "third_party/Matcha-TTS") if COSYVOICE_DIR else None)
 
 _ALREADY_INJECTED = False
 
@@ -23,6 +24,11 @@ def _inject_paths():
     global _ALREADY_INJECTED
     if _ALREADY_INJECTED:
         return
+    if not COSYVOICE_DIR:
+        raise RuntimeError(
+            "COSYVOICE_DIR 环境变量未设置，无法加载 CosyVoice。"
+            "请设置 COSYVOICE_DIR 指向 CosyVoice 仓库根目录。"
+        )
     sys.path.insert(0, COSYVOICE_DIR)
     sys.path.insert(0, MATCHA_TTS_DIR)
     _ALREADY_INJECTED = True
@@ -33,7 +39,7 @@ class CosyVoiceTTS:
 
     使用示例::
 
-        tts = CosyVoiceTTS("/home/liborui/CosyVoice/pretrained_models/CosyVoice-300M-SFT")
+        tts = CosyVoiceTTS("/path/to/CosyVoice-300M-SFT")
         tts.load()
         success = await tts.synthesize_to_file("你好世界", "/tmp/out.wav")
     """
