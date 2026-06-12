@@ -1,8 +1,7 @@
 #include "loginmanager.h"
 #include "apiservice.h"
 
-#include <QCryptographicHash>
-#include <QRandomGenerator>
+#include <QSettings>
 
 LoginManager::LoginManager(QObject *parent)
     : QObject(parent)
@@ -11,6 +10,14 @@ LoginManager::LoginManager(QObject *parent)
     connect(&api, &ApiService::loginResult, this, [this](bool success, QVariantMap userInfo, const QString &error) {
         if (success) {
             setLoggedInState(true, userInfo);
+        } else {
+            emit loginFailed(error);
+        }
+    });
+    connect(&api, &ApiService::registerResult, this, [this](bool success, QVariantMap userInfo, const QString &error) {
+        if (success) {
+            setLoggedInState(true, userInfo);
+            emit autoLoginChecked(true);
         } else {
             emit loginFailed(error);
         }
@@ -27,6 +34,11 @@ LoginManager::LoginManager(QObject *parent)
         setLoggedInState(false, {});
         emit loggedOut();
     });
+
+    // 从持久化存储恢复认证信息
+    QSettings settings;
+    m_storedToken = settings.value("auth/token").toString();
+    m_storedUserId = settings.value("auth/userId", -1).toInt();
 }
 
 bool LoginManager::isLoggedIn() const
@@ -41,7 +53,7 @@ QVariantMap LoginManager::currentUser() const
 
 void LoginManager::checkAutoLogin()
 {
-    if (m_storedToken.isEmpty() || m_storedUserId <= 0) {
+    if (m_storedToken.isEmpty()) {
         setLoggedInState(false, {});
         emit autoLoginChecked(false);
         return;
@@ -51,30 +63,21 @@ void LoginManager::checkAutoLogin()
 
 void LoginManager::login(const QString &username, const QString &password, bool remember)
 {
+    m_rememberMe = remember;
     ApiService::instance().login(username, password);
+}
 
-    if (remember) {
-        m_storedToken = generateToken();
-        m_storedUserId = 1;
-    }
+void LoginManager::registerUser(const QString &username, const QString &password,
+                                 const QString &confirmPassword, const QString &displayName)
+{
+    m_rememberMe = true;
+    ApiService::instance().registerUser(username, password, confirmPassword, displayName);
 }
 
 void LoginManager::logout()
 {
     clearAuthToken();
     ApiService::instance().logout(m_currentUser["id"].toInt());
-}
-
-QString LoginManager::generateToken() const
-{
-    const QString chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    QString token;
-    token.reserve(64);
-    for (int i = 0; i < 64; ++i) {
-        int index = QRandomGenerator::global()->bounded(chars.size());
-        token.append(chars.at(index));
-    }
-    return token;
 }
 
 void LoginManager::setLoggedInState(bool loggedIn, const QVariantMap &user)
@@ -85,6 +88,14 @@ void LoginManager::setLoggedInState(bool loggedIn, const QVariantMap &user)
     }
     m_currentUser = user;
     emit currentUserChanged();
+
+    if (loggedIn && m_rememberMe) {
+        QSettings settings;
+        settings.setValue("auth/token", user["token"].toString());
+        settings.setValue("auth/userId", user["id"].toInt());
+        settings.setValue("auth/displayName", user["displayName"].toString());
+        settings.setValue("auth/role", user["role"].toString());
+    }
 }
 
 void LoginManager::saveAuthToken(const QString &token, int userId)
@@ -97,4 +108,9 @@ void LoginManager::clearAuthToken()
 {
     m_storedToken.clear();
     m_storedUserId = -1;
+    QSettings settings;
+    settings.remove("auth/token");
+    settings.remove("auth/userId");
+    settings.remove("auth/displayName");
+    settings.remove("auth/role");
 }

@@ -1,6 +1,5 @@
 #include "apiservice.h"
 
-#include <QCryptographicHash>
 #include <QDateTime>
 #include <QFile>
 #include <QHttpMultiPart>
@@ -69,35 +68,106 @@ QVariantList ApiService::mapMessagesToFrontendFormat(const QVariantList &items) 
     return result;
 }
 
-// ==================== Auth (stubs kept for now) ====================
+// ==================== Auth (real HTTP) ====================
 
 void ApiService::login(const QString &username, const QString &password)
 {
-    QString hash = QString(QCryptographicHash::hash(password.toUtf8(), QCryptographicHash::Sha256).toHex());
+    QUrl url(BASE_URL + "/api/v1/auth/login");
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
-    QTimer::singleShot(0, this, [this, username, hash]() {
-        if (username == "admin" && hash == QString(QCryptographicHash::hash(QString("admin123").toUtf8(), QCryptographicHash::Sha256).toHex())) {
+    QJsonObject body;
+    body["username"] = username;
+    body["password"] = password;
+
+    QNetworkReply *reply = m_networkManager->post(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit loginResult(false, QVariantMap(), QStringLiteral("网络错误：无法连接到服务器"));
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        int code = resp["code"].toInt();
+        if (code == 200) {
+            QJsonObject data = resp["data"].toObject();
+            m_authToken = data["token"].toString();
             QVariantMap userInfo;
-            userInfo["id"] = 1;
-            userInfo["username"] = "admin";
-            userInfo["displayName"] = QStringLiteral("管理员");
-            userInfo["avatarUrl"] = "";
+            userInfo["id"] = data["user_id"].toInt();
+            userInfo["username"] = data["username"].toString();
+            userInfo["displayName"] = data["display_name"].toString();
+            userInfo["role"] = data["role"].toString();
+            userInfo["token"] = m_authToken;
             emit loginResult(true, userInfo, "");
         } else {
-            emit loginResult(false, QVariantMap(), QStringLiteral("用户名或密码错误"));
+            emit loginResult(false, QVariantMap(), resp["message"].toString());
+        }
+    });
+}
+
+void ApiService::registerUser(const QString &username, const QString &password,
+                               const QString &confirmPassword, const QString &displayName)
+{
+    QUrl url(BASE_URL + "/api/v1/auth/register");
+    QNetworkRequest req(url);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject body;
+    body["username"] = username;
+    body["password"] = password;
+    body["confirm_password"] = confirmPassword;
+    body["display_name"] = displayName;
+
+    QNetworkReply *reply = m_networkManager->post(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit registerResult(false, QVariantMap(), QStringLiteral("网络错误：无法连接到服务器"));
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        int code = resp["code"].toInt();
+        if (code == 200) {
+            QJsonObject data = resp["data"].toObject();
+            m_authToken = data["token"].toString();
+            QVariantMap userInfo;
+            userInfo["id"] = data["user_id"].toInt();
+            userInfo["username"] = data["username"].toString();
+            userInfo["displayName"] = data["display_name"].toString();
+            userInfo["role"] = data["role"].toString();
+            userInfo["token"] = m_authToken;
+            emit registerResult(true, userInfo, "");
+        } else {
+            emit registerResult(false, QVariantMap(), resp["message"].toString());
         }
     });
 }
 
 void ApiService::checkAutoLogin(const QString &token, int userId)
 {
-    QTimer::singleShot(0, this, [this, token, userId]() {
-        if (!token.isEmpty() && userId > 0) {
+    Q_UNUSED(userId)
+    if (token.isEmpty()) {
+        emit autoLoginResult(false, QVariantMap());
+        return;
+    }
+    QUrl url(BASE_URL + "/api/v1/auth/verify");
+    QNetworkRequest req(url);
+    req.setRawHeader("Authorization", ("Bearer " + token).toUtf8());
+
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit autoLoginResult(false, QVariantMap());
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        int code = resp["code"].toInt();
+        if (code == 200) {
+            QJsonObject data = resp["data"].toObject();
             QVariantMap userInfo;
-            userInfo["id"] = userId;
-            userInfo["username"] = "admin";
-            userInfo["displayName"] = QStringLiteral("管理员");
-            userInfo["avatarUrl"] = "";
+            userInfo["id"] = data["user_id"].toInt();
+            userInfo["role"] = data["role"].toString();
             emit autoLoginResult(true, userInfo);
         } else {
             emit autoLoginResult(false, QVariantMap());
@@ -107,13 +177,29 @@ void ApiService::checkAutoLogin(const QString &token, int userId)
 
 void ApiService::validateToken(const QString &token, int userId)
 {
-    QTimer::singleShot(0, this, [this, token, userId]() {
-        if (!token.isEmpty() && userId > 0) {
+    Q_UNUSED(userId)
+    if (token.isEmpty()) {
+        emit autoLoginResult(false, QVariantMap());
+        return;
+    }
+    QUrl url(BASE_URL + "/api/v1/auth/verify");
+    QNetworkRequest req(url);
+    req.setRawHeader("Authorization", ("Bearer " + token).toUtf8());
+
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit autoLoginResult(false, QVariantMap());
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        int code = resp["code"].toInt();
+        if (code == 200) {
+            QJsonObject data = resp["data"].toObject();
             QVariantMap userInfo;
-            userInfo["id"] = userId;
-            userInfo["username"] = "admin";
-            userInfo["displayName"] = QStringLiteral("管理员");
-            userInfo["avatarUrl"] = "";
+            userInfo["id"] = data["user_id"].toInt();
+            userInfo["role"] = data["role"].toString();
             emit autoLoginResult(true, userInfo);
         } else {
             emit autoLoginResult(false, QVariantMap());
@@ -121,9 +207,19 @@ void ApiService::validateToken(const QString &token, int userId)
     });
 }
 
-void ApiService::logout(int)
+void ApiService::logout(int userId)
 {
-    QTimer::singleShot(0, this, [this]() {
+    Q_UNUSED(userId)
+    QUrl url(BASE_URL + "/api/v1/auth/logout");
+    QNetworkRequest req(url);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+
+    QNetworkReply *reply = m_networkManager->post(req, QByteArray());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        m_authToken.clear();
         emit logoutResult(true);
     });
 }

@@ -42,6 +42,10 @@ ApplicationWindow {
                     initAfterLogin()
                     stackView.replace(chatPage)
                 }
+                onRegisterSucceeded: function(username, password) {
+                    initialCheckDone = false
+                    loginManager.registerUser(username, password, password, username)
+                }
             }
         }
 

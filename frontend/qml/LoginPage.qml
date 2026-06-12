@@ -6,6 +6,9 @@ import QtQuick.Layouts
 Page {
     id: root
     signal loginSucceeded()
+    signal registerSucceeded(string username, string password)
+
+    property bool isRegisterMode: false
 
     Rectangle {
         anchors.fill: parent
@@ -39,7 +42,7 @@ Page {
                     }
 
                     Text {
-                        text: qsTr("登录您的账号")
+                        text: isRegisterMode ? qsTr("注册新账号") : qsTr("登录您的账号")
                         font.pixelSize: 14
                         color: "#666"
                         Layout.alignment: Qt.AlignHCenter
@@ -69,6 +72,30 @@ Page {
                         onAccepted: loginBtn.clicked()
                     }
 
+                    TextField {
+                        id: confirmPasswordField
+                        Layout.fillWidth: true
+                        visible: isRegisterMode
+                        placeholderText: qsTr("确认密码")
+                        echoMode: TextInput.Password
+                        leftPadding: 12
+                        font.pixelSize: 16
+                        height: 48
+                        Material.accent: Material.Blue
+                        onAccepted: loginBtn.clicked()
+                    }
+
+                    TextField {
+                        id: displayNameField
+                        Layout.fillWidth: true
+                        visible: isRegisterMode
+                        placeholderText: qsTr("昵称")
+                        leftPadding: 12
+                        font.pixelSize: 16
+                        height: 48
+                        Material.accent: Material.Blue
+                    }
+
                     CheckBox {
                         id: rememberCb
                         text: qsTr("记住登录状态")
@@ -85,14 +112,34 @@ Page {
                         wrapMode: Text.WordWrap
                     }
 
+                    Text {
+                        text: isRegisterMode ? qsTr("已有账号？登录") : qsTr("没有账号？注册")
+                        color: Material.accent
+                        font.pixelSize: 13
+                        Layout.alignment: Qt.AlignHCenter
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                isRegisterMode = !isRegisterMode
+                                errorText.visible = false
+                            }
+                        }
+                    }
+
                     Button {
                         id: loginBtn
                         Layout.fillWidth: true
-                        text: qsTr("登 录")
+                        text: isRegisterMode ? qsTr("注 册") : qsTr("登 录")
                         font.pixelSize: 16
                         font.bold: true
                         height: 48
-                        enabled: usernameField.text.trim() !== "" && passwordField.text !== "" && !loginBtn.loading
+                        enabled: isRegisterMode
+                                  ? (usernameField.text.trim() !== "" && passwordField.text !== ""
+                                     && confirmPasswordField.text !== "" && displayNameField.text.trim() !== ""
+                                     && !loginBtn.loading)
+                                  : (usernameField.text.trim() !== "" && passwordField.text !== "" && !loginBtn.loading)
 
                         property bool loading: false
 
@@ -100,6 +147,22 @@ Page {
                         Material.foreground: "white"
 
                         onClicked: {
+                            if (isRegisterMode) {
+                                if (confirmPasswordField.text !== passwordField.text) {
+                                    errorText.text = qsTr("两次输入的密码不一致")
+                                    errorText.color = Material.Red
+                                    errorText.visible = true
+                                    return
+                                }
+                                if (displayNameField.text.trim() === "") {
+                                    errorText.text = qsTr("请输入昵称")
+                                    errorText.color = Material.Red
+                                    errorText.visible = true
+                                    return
+                                }
+                                root.registerSucceeded(usernameField.text.trim(), passwordField.text)
+                                return
+                            }
                             loading = true
                             errorText.visible = false
                             loginManager.login(usernameField.text.trim(), passwordField.text, rememberCb.checked)

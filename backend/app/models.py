@@ -2,7 +2,7 @@
 数据库模型：对话（Conversation）和消息（Message）
 """
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, func
 from app.database import Base
 
 
@@ -89,4 +89,32 @@ class KnowledgeDoc(Base):
             "content_preview": self.content_preview,
             "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
             "updated_at": self.updated_at.isoformat() + "Z" if self.updated_at else None,
+        }
+
+
+class User(Base):
+    """用户表"""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(32), unique=True, nullable=False, index=True)
+    password_hash = Column(String(128), nullable=False)
+    display_name = Column(String(50), nullable=False)
+    role = Column(String(16), nullable=False, default="visitor")
+    phone = Column(String(20), nullable=True)
+    email = Column(String(128), nullable=True)
+    avatar_url = Column(String(512), nullable=True)
+    created_at = Column(DateTime, default=func.now())
+
+    def to_dict(self):
+        """用户信息字典（不含密码哈希）"""
+        return {
+            "id": self.id,
+            "username": self.username,
+            "display_name": self.display_name,
+            "role": self.role,
+            "phone": self.phone,
+            "email": self.email,
+            "avatar_url": self.avatar_url,
+            "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
         }

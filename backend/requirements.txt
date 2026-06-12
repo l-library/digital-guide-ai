@@ -93,3 +93,10 @@ pytest==9.0.3
 # 3. PyTorch CUDA 版本（当前安装 torch==2.11.0+cu130）
 #    如需 CPU only：将 torch/torchaudio 改为 cpu 版本
 #    pip install torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cpu
+
+# ---------------------------------------------------------------------------
+# 认证 / JWT
+# ---------------------------------------------------------------------------
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1

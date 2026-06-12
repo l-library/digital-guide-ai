@@ -13,6 +13,16 @@ async def lifespan(app: FastAPI):
     init_db()
     print("数据库就绪。")
 
+    print("正在初始化种子管理员用户...")
+    from app.services.auth_service import init_seed_user
+    from app.database import SessionLocal
+    db = SessionLocal()
+    try:
+        init_seed_user(db)
+    finally:
+        db.close()
+    print("种子用户检查完成。")
+
     print("正在预热RAG服务，加载embedding模型...")
     from app.services.rag_service import _get_stores
     _get_stores()

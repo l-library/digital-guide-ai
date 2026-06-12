@@ -17,6 +17,8 @@ public:
 
     Q_INVOKABLE void checkAutoLogin();
     Q_INVOKABLE void login(const QString &username, const QString &password, bool remember);
+    Q_INVOKABLE void registerUser(const QString &username, const QString &password,
+                                   const QString &confirmPassword, const QString &displayName);
     Q_INVOKABLE void logout();
 
 signals:
@@ -31,8 +33,7 @@ private:
     QVariantMap m_currentUser;
     QString m_storedToken;
     int m_storedUserId = -1;
-
-    QString generateToken() const;
+    bool m_rememberMe = false;
     void setLoggedInState(bool loggedIn, const QVariantMap &user);
     void saveAuthToken(const QString &token, int userId);
     void clearAuthToken();

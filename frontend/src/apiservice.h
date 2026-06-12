@@ -87,6 +87,8 @@ public:
     void checkAutoLogin(const QString &token, int userId);
     void logout(int userId);
     void validateToken(const QString &token, int userId);
+    void registerUser(const QString &username, const QString &password,
+                      const QString &confirmPassword, const QString &displayName);
 
     // Conversations
     void createConversation(int userId, const QString &title, int knowledgeDocId = -1);
@@ -137,6 +139,7 @@ signals:
     void loginResult(bool success, QVariantMap userInfo, const QString &error);
     void autoLoginResult(bool loggedIn, QVariantMap userInfo);
     void logoutResult(bool success);
+    void registerResult(bool success, QVariantMap userInfo, const QString &error);
 
     // Conversations
     void conversationCreated(int conversationId);
@@ -193,6 +196,7 @@ private:
     ApiService &operator=(const ApiService &) = delete;
 
     QNetworkAccessManager *m_networkManager;
+    QString m_authToken;
     QWebSocket *m_webSocket;
     QNetworkReply *m_streamReply = nullptr;
     QNetworkReply *m_voiceStreamReply = nullptr;

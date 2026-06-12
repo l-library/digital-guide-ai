@@ -31,6 +31,7 @@
 export LLM_API_KEY=sk-65d54b40f8a0480c86dedb316ce13304
 export LLM_BASE_URL=https://api.deepseek.com
 export LLM_MODEL_NAME=deepseek-v4-flash
+export JWT_SECRET_KEY=<your-jwt-secret>  # 用于 JWT 签名和验证
 ```
 
 **依赖管理：**

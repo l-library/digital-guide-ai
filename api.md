@@ -73,7 +73,11 @@ POST /auth/register
 {
   "username": "string (3-32位，字母数字下划线)",
   "password": "string (6-64位)",
-  "display_name": "string (昵称)"
+  "confirm_password": "string (需与password一致)",
+  "display_name": "string (昵称)",
+  "phone": "string (可选，预留，个人资料编辑功能中实现)",
+  "email": "string (可选，预留，个人资料编辑功能中实现)",
+  "avatar_url": "string (可选，预留，个人资料编辑功能中实现)"
 }
 ```
 
@@ -85,7 +89,8 @@ POST /auth/register
   "username": "visitor1",
   "display_name": "游客小王",
   "role": "visitor",
-  "token": "eyJhbGciOiJIUzI1NiIs..."
+  "token": "eyJhbGciOiJIUzI1NiIs...",
+  "expires_at": "2026-04-29T12:00:00Z"
 }
 ```
 
@@ -120,6 +125,8 @@ POST /auth/login
 > `role` 取值：`visitor`（游客）、`admin`（管理员）。
 
 ### 1.3 刷新 Token
+
+> ⚠️ **未实现**：JWT 7天过期，暂不需要刷新端点。保留此定义供后续扩展。
 
 ```
 POST /auth/refresh
