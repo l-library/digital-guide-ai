@@ -60,37 +60,71 @@ Page {
 
                 ColumnLayout {
                     width: parent.width
-                    spacing: 8
+                    spacing: 12
 
+                    // Avatar + display name row
                     RowLayout {
                         spacing: 12
 
+                        // Avatar circle (first character of displayName)
                         Rectangle {
-                            width: 48; height: 48; radius: 24
-                            color: Material.color(Material.Blue, Material.Shade200)
+                            width: 56; height: 56; radius: 28
+                            color: Material.color(Material.Blue, Material.Shade300)
 
                             Text {
                                 anchors.centerIn: parent
-                                text: settingsManager.userInfo.displayName
-                                      ? settingsManager.userInfo.displayName.charAt(0) : "?"
-                                font.pixelSize: 22
+                                text: loginManager.currentUser.displayName 
+                                      ? loginManager.currentUser.displayName.charAt(0).toUpperCase() 
+                                      : (loginManager.currentUser.username 
+                                         ? loginManager.currentUser.username.charAt(0).toUpperCase() 
+                                         : "?")
+                                font.pixelSize: 24
                                 font.bold: true
                                 color: "white"
                             }
                         }
 
                         ColumnLayout {
-                            spacing: 2
+                            spacing: 4
+
+                            // Display name
                             Label {
-                                text: settingsManager.userInfo.displayName || qsTr("未知用户")
-                                font.pixelSize: 16
+                                text: loginManager.currentUser.displayName 
+                                      || loginManager.currentUser.username 
+                                      || qsTr("未知用户")
+                                font.pixelSize: 18
                                 font.bold: true
                             }
+
+                            // Username
                             Label {
-                                text: settingsManager.userInfo.username || ""
+                                text: "@" + (loginManager.currentUser.username || "")
                                 font.pixelSize: 13
-                                color: "#999"
+                                color: "#666"
                             }
+                        }
+                    }
+
+                    // Role badge
+                    Rectangle {
+                        Layout.preferredWidth: roleLabel.implicitWidth + 16
+                        Layout.preferredHeight: 24
+                        radius: 12
+                        color: loginManager.currentUser.role === "admin" 
+                               ? Material.color(Material.Orange, Material.Shade200)
+                               : Material.color(Material.Blue, Material.Shade100)
+
+                        Label {
+                            id: roleLabel
+                            anchors.centerIn: parent
+                            text: loginManager.currentUser.role === "admin" 
+                                  ? qsTr("👑 管理员") 
+                                  : qsTr("👤 游客")
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: loginManager.currentUser.role === "admin" 
+                                   ? Material.color(Material.Orange, Material.Shade900)
+                                   : Material.color(Material.Blue, Material.Shade900)
                         }
                     }
                 }

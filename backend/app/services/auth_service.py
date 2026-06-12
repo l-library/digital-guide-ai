@@ -112,6 +112,23 @@ async def get_current_user(
 def init_seed_user(db: Session) -> None:
     existing = db.query(User).filter(User.id == 1).first()
     if existing is not None:
+        # 修复旧记录可能缺失的字段
+        updated = False
+        if not existing.username:
+            existing.username = "admin"
+            updated = True
+        if not existing.display_name:
+            existing.display_name = "管理员"
+            updated = True
+        if not existing.role:
+            existing.role = "admin"
+            updated = True
+        if not existing.password_hash:
+            existing.password_hash = hash_password("admin123")
+            updated = True
+        if updated:
+            db.commit()
+            print("[auth] 种子管理员字段已修复（admin/admin123）")
         return
 
     admin_user = User(
