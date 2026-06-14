@@ -38,6 +38,10 @@ ConversationManager::ConversationManager(QObject *parent)
             ApiService::instance().sendVoiceMessage(m_currentConversationId, filePath, m_digitalHumanId, m_responseType);
         }
 
+        if (m_currentUserId > 0) {
+            loadConversationList(m_currentUserId);
+        }
+
         emit messagesChanged();
     });
     connect(&api, &ApiService::conversationsLoaded, this, [this](QVariantList convs) {
@@ -124,6 +128,11 @@ ConversationManager::ConversationManager(QObject *parent)
         }
         if (m_currentUserId > 0) {
             loadConversationList(m_currentUserId);
+        }
+    });
+    connect(&api, &ApiService::conversationDeleted, this, [this](bool success) {
+        if (!success) {
+            emit errorOccurred(QStringLiteral("删除对话失败"));
         }
     });
     connect(&api, &ApiService::titleAutoUpdated, this, [this](int conversationId, const QString &newTitle) {
@@ -302,6 +311,29 @@ void ConversationManager::renameCurrentConversation(const QString &newTitle)
 void ConversationManager::renameConversationById(int conversationId, const QString &newTitle)
 {
     ApiService::instance().renameConversation(conversationId, newTitle);
+}
+
+void ConversationManager::deleteConversation(int conversationId)
+{
+    ApiService::instance().deleteConversation(conversationId);
+    for (int i = 0; i < m_conversations.size(); ++i) {
+        if (m_conversations[i].toMap()["id"].toInt() == conversationId) {
+            m_conversations.removeAt(i);
+            emit conversationsChanged();
+            break;
+        }
+    }
+    if (conversationId == m_currentConversationId) {
+        int savedUserId = m_currentUserId;
+        clearCurrentConversation();
+        m_currentUserId = savedUserId;
+        if (!m_conversations.isEmpty()) {
+            int firstId = m_conversations.first().toMap()["id"].toInt();
+            loadConversation(firstId);
+        } else {
+            startNewConversation(m_currentUserId, QStringLiteral("新对话"));
+        }
+    }
 }
 
 void ConversationManager::connectWebSocket()

@@ -9,6 +9,8 @@ Page {
     signal navigateBack()
     signal logoutRequested()
 
+    property string avatarImagePath: loginManager.currentUser.avatarUrl || ""
+
     header: ToolBar {
         Material.background: Material.color(Material.Blue, Material.Shade700)
         Material.foreground: "white"
@@ -68,8 +70,19 @@ Page {
 
                         // Avatar circle (first character of displayName)
                         Rectangle {
+                            id: userAvatarRect
                             width: 56; height: 56; radius: 28
                             color: Material.color(Material.Blue, Material.Shade300)
+                            clip: true
+
+                            Image {
+                                anchors.fill: parent
+                                source: (loginManager.currentUser.avatarUrl && loginManager.currentUser.avatarUrl !== "") 
+                                        ? "file://" + loginManager.currentUser.avatarUrl 
+                                        : ""
+                                fillMode: Image.PreserveAspectCrop
+                                visible: loginManager.currentUser.avatarUrl && loginManager.currentUser.avatarUrl !== ""
+                            }
 
                             Text {
                                 anchors.centerIn: parent
@@ -81,6 +94,7 @@ Page {
                                 font.pixelSize: 24
                                 font.bold: true
                                 color: "white"
+                                visible: !(loginManager.currentUser.avatarUrl && loginManager.currentUser.avatarUrl !== "")
                             }
                         }
 
@@ -125,6 +139,186 @@ Page {
                             color: loginManager.currentUser.role === "admin" 
                                    ? Material.color(Material.Orange, Material.Shade900)
                                    : Material.color(Material.Blue, Material.Shade900)
+                        }
+                    }
+                }
+            }
+
+            GroupBox {
+                title: qsTr("账号设置")
+                Layout.fillWidth: true
+                Material.elevation: 2
+
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 16
+
+                    // 修改头像
+                    RowLayout {
+                        spacing: 12
+
+                        Label {
+                            text: qsTr("头像")
+                            font.pixelSize: 14
+                            Layout.preferredWidth: 60
+                        }
+
+                        Rectangle {
+                            id: avatarPreview
+                            width: 64; height: 64; radius: 32
+                            color: Material.color(Material.Grey, Material.Shade200)
+                            border.width: 1
+                            border.color: Material.color(Material.Grey, Material.Shade400)
+                            clip: true
+
+                            Image {
+                                anchors.fill: parent
+                                source: avatarImagePath !== "" ? "file://" + avatarImagePath : ""
+                                fillMode: Image.PreserveAspectCrop
+                                visible: avatarImagePath !== ""
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "?"
+                                font.pixelSize: 20
+                                color: "#999"
+                                visible: avatarImagePath === ""
+                            }
+                        }
+
+                        Button {
+                            text: qsTr("选择图片")
+                            font.pixelSize: 13
+                            flat: true
+                            onClicked: avatarFileDialog.open()
+                        }
+
+                        Button {
+                            text: qsTr("清除")
+                            font.pixelSize: 13
+                            flat: true
+                            visible: avatarImagePath !== ""
+                            onClicked: avatarImagePath = ""
+                        }
+                    }
+
+                    // 修改昵称
+                    RowLayout {
+                        spacing: 12
+
+                        Label {
+                            text: qsTr("昵称")
+                            font.pixelSize: 14
+                            Layout.preferredWidth: 60
+                        }
+
+                        TextField {
+                            id: nicknameField
+                            Layout.fillWidth: true
+                            font.pixelSize: 14
+                            placeholderText: qsTr("请输入新昵称")
+                            text: loginManager.currentUser.displayName || ""
+                            maximumLength: 50
+                        }
+                    }
+
+                    // 保存个人资料按钮
+                    RowLayout {
+                        Item { Layout.fillWidth: true }
+
+                        Button {
+                            text: qsTr("保存资料")
+                            font.pixelSize: 14
+                            enabled: nicknameField.text.length > 0
+                            onClicked: {
+                                loginManager.updateProfile(nicknameField.text, avatarImagePath)
+                                profileSavedDialog.open()
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 1
+                        color: "#E0E0E0"
+                    }
+
+                    // 修改密码
+                    Label {
+                        text: qsTr("修改密码")
+                        font.pixelSize: 14
+                        font.bold: true
+                    }
+
+                    RowLayout {
+                        spacing: 12
+
+                        Label {
+                            text: qsTr("旧密码")
+                            font.pixelSize: 14
+                            Layout.preferredWidth: 60
+                        }
+
+                        TextField {
+                            id: oldPasswordField
+                            Layout.fillWidth: true
+                            font.pixelSize: 14
+                            placeholderText: qsTr("请输入旧密码")
+                            echoMode: TextInput.Password
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: 12
+
+                        Label {
+                            text: qsTr("新密码")
+                            font.pixelSize: 14
+                            Layout.preferredWidth: 60
+                        }
+
+                        TextField {
+                            id: newPasswordField
+                            Layout.fillWidth: true
+                            font.pixelSize: 14
+                            placeholderText: qsTr("请输入新密码")
+                            echoMode: TextInput.Password
+                            maximumLength: 64
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: 12
+
+                        Label {
+                            text: qsTr("确认密码")
+                            font.pixelSize: 14
+                            Layout.preferredWidth: 60
+                        }
+
+                        TextField {
+                            id: confirmPasswordField
+                            Layout.fillWidth: true
+                            font.pixelSize: 14
+                            placeholderText: qsTr("请再次输入新密码")
+                            echoMode: TextInput.Password
+                            maximumLength: 64
+                        }
+                    }
+
+                    RowLayout {
+                        Item { Layout.fillWidth: true }
+
+                        Button {
+                            text: qsTr("修改密码")
+                            font.pixelSize: 14
+                            enabled: oldPasswordField.text.length > 0 
+                                     && newPasswordField.text.length >= 6 
+                                     && newPasswordField.text === confirmPasswordField.text
+                            onClicked: {
+                                loginManager.changePassword(oldPasswordField.text, newPasswordField.text)
+                            }
                         }
                     }
                 }
@@ -337,6 +531,68 @@ Page {
         onAccepted: {
             var userId = loginManager.currentUser.id
             settingsManager.uploadKnowledgeDoc(userId, selectedFile.toString().replace("file://", ""))
+        }
+    }
+
+    FileDialog {
+        id: avatarFileDialog
+        title: qsTr("选择头像图片")
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["图片文件 (*.png *.jpg *.jpeg *.bmp *.gif)", "所有文件 (*)"]
+
+        onAccepted: {
+            avatarImagePath = selectedFile.toString().replace("file://", "")
+        }
+    }
+
+    Dialog {
+        id: profileSavedDialog
+        title: qsTr("提示")
+        standardButtons: Dialog.Ok
+        modal: true
+        anchors.centerIn: parent
+
+        Label {
+            text: qsTr("个人资料已保存")
+            font.pixelSize: 14
+        }
+    }
+
+    Dialog {
+        id: passwordResultDialog
+        title: qsTr("提示")
+        standardButtons: Dialog.Ok
+        modal: true
+        anchors.centerIn: parent
+
+        property string messageText: ""
+
+        Label {
+            text: passwordResultDialog.messageText
+            font.pixelSize: 14
+        }
+
+        onAccepted: {
+            if (passwordResultDialog.messageText.indexOf("成功") >= 0) {
+                oldPasswordField.text = ""
+                newPasswordField.text = ""
+                confirmPasswordField.text = ""
+            }
+        }
+    }
+
+    Connections {
+        target: loginManager
+        function onProfileUpdated(displayName, avatarUrl) {
+            avatarImagePath = avatarUrl || ""
+        }
+        function onPasswordChangeSucceeded() {
+            passwordResultDialog.messageText = qsTr("密码修改成功")
+            passwordResultDialog.open()
+        }
+        function onPasswordChangeFailed(error) {
+            passwordResultDialog.messageText = error
+            passwordResultDialog.open()
         }
     }
 }

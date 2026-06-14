@@ -44,6 +44,7 @@ public:
     Q_INVOKABLE void autoLoadOrCreateConversation(int userId);
     Q_INVOKABLE void renameCurrentConversation(const QString &newTitle);
     Q_INVOKABLE void renameConversationById(int conversationId, const QString &newTitle);
+    Q_INVOKABLE void deleteConversation(int conversationId);
     Q_INVOKABLE void connectWebSocket();
     Q_INVOKABLE void disconnectWebSocket();
 

@@ -17,6 +17,7 @@ public:
 
     Q_INVOKABLE void loadHistory(int userId);
     Q_INVOKABLE void deleteConversation(int conversationId);
+    Q_INVOKABLE void renameConversation(int conversationId, const QString &newTitle);
     Q_INVOKABLE bool exportConversation(int conversationId, const QString &filePath);
     Q_INVOKABLE void restoreConversation(int conversationId);
     Q_INVOKABLE void search(int userId, const QString &query);

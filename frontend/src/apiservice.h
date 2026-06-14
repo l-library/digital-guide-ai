@@ -89,6 +89,8 @@ public:
     void validateToken(const QString &token, int userId);
     void registerUser(const QString &username, const QString &password,
                       const QString &confirmPassword, const QString &displayName);
+    void updateUserProfile(int userId, const QString &displayName, const QString &avatarUrl);
+    void changeUserPassword(int userId, const QString &oldPassword, const QString &newPassword);
 
     // Conversations
     void createConversation(int userId, const QString &title, int knowledgeDocId = -1);
@@ -140,6 +142,8 @@ signals:
     void autoLoginResult(bool loggedIn, QVariantMap userInfo);
     void logoutResult(bool success);
     void registerResult(bool success, QVariantMap userInfo, const QString &error);
+    void profileUpdateResult(bool success, QVariantMap updatedUser, const QString &error);
+    void passwordChangeResult(bool success, const QString &error);
 
     // Conversations
     void conversationCreated(int conversationId);

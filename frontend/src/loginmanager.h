@@ -20,6 +20,8 @@ public:
     Q_INVOKABLE void registerUser(const QString &username, const QString &password,
                                    const QString &confirmPassword, const QString &displayName);
     Q_INVOKABLE void logout();
+    Q_INVOKABLE void updateProfile(const QString &displayName, const QString &avatarUrl);
+    Q_INVOKABLE void changePassword(const QString &oldPassword, const QString &newPassword);
 
 signals:
     void loginStateChanged();
@@ -27,6 +29,9 @@ signals:
     void autoLoginChecked(bool loggedIn);
     void loginFailed(const QString &error);
     void loggedOut();
+    void profileUpdated(const QString &displayName, const QString &avatarUrl);
+    void passwordChangeFailed(const QString &error);
+    void passwordChangeSucceeded();
 
 private:
     bool m_loggedIn = false;

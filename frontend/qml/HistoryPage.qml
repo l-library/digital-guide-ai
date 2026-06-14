@@ -128,10 +128,23 @@ Page {
                             }
                         }
 
-                        Text {
-                            text: "›"
-                            font.pixelSize: 18
-                            color: "#ccc"
+                        ItemDelegate {
+                            implicitWidth: 36
+                            implicitHeight: 36
+
+                            Image {
+                                anchors.centerIn: parent
+                                source: "qrc:/asset/setting.png"
+                                width: 18
+                                height: 18
+                                smooth: true
+                            }
+
+                            onClicked: {
+                                historyMenu.conversationId = modelData.id
+                                historyMenu.conversationTitle = modelData.title || ""
+                                historyMenu.popup()
+                            }
                         }
                     }
 
@@ -144,22 +157,25 @@ Page {
                         padding: 12
                         width: 72
                         height: parent.height
+                        background: Rectangle { color: "#F44336" }
                         SwipeDelegate.onClicked: {
                             historyManager.deleteConversation(modelData.id)
                         }
                     }
 
                     swipe.right: Label {
-                        text: qsTr("导出")
+                        text: qsTr("重命名")
                         color: "white"
                         verticalAlignment: Label.AlignVCenter
                         horizontalAlignment: Label.AlignHCenter
                         padding: 12
                         width: 72
                         height: parent.height
+                        background: Rectangle { color: "#1976D2" }
                         SwipeDelegate.onClicked: {
-                            var filePath = "/tmp/conversation_" + modelData.id + ".json"
-                            historyManager.exportConversation(modelData.id, filePath)
+                            historyRenameDialog.conversationId = modelData.id
+                            historyRenameDialog.conversationTitle = modelData.title || ""
+                            historyRenameDialog.open()
                         }
                     }
 
@@ -168,6 +184,102 @@ Page {
                     }
                 }
             }
+        }
+    }
+
+    Menu {
+        id: historyMenu
+        property int conversationId: -1
+        property string conversationTitle: ""
+
+        MenuItem {
+            text: qsTr("重命名")
+            font.pixelSize: 14
+            onTriggered: {
+                historyRenameDialog.conversationId = historyMenu.conversationId
+                historyRenameDialog.conversationTitle = historyMenu.conversationTitle
+                historyRenameDialog.open()
+            }
+        }
+        MenuItem {
+            text: qsTr("导出")
+            font.pixelSize: 14
+            onTriggered: {
+                historyMenu.close()
+                var filePath = "/tmp/conversation_" + historyMenu.conversationId + ".json"
+                historyManager.exportConversation(historyMenu.conversationId, filePath)
+            }
+        }
+        MenuItem {
+            text: qsTr("删除")
+            font.pixelSize: 14
+            onTriggered: {
+                historyDeleteDialog.conversationId = historyMenu.conversationId
+                historyDeleteDialog.open()
+            }
+        }
+    }
+
+    Dialog {
+        id: historyRenameDialog
+        title: qsTr("重命名对话")
+        anchors.centerIn: parent
+        standardButtons: Dialog.Ok | Dialog.Cancel
+
+        property int conversationId: -1
+        property string conversationTitle: ""
+
+        onOpened: {
+            historyNameField.text = conversationTitle
+            historyNameField.selectAll()
+            historyNameField.forceActiveFocus()
+        }
+
+        onAccepted: {
+            var newTitle = historyNameField.text.trim()
+            if (newTitle !== "" && conversationId > 0) {
+                historyManager.renameConversation(conversationId, newTitle)
+            }
+        }
+
+        ColumnLayout {
+            spacing: 12
+            anchors { left: parent.left; right: parent.right }
+
+            Label {
+                text: qsTr("请输入新的对话名称：")
+                font.pixelSize: 14
+            }
+
+            TextField {
+                id: historyNameField
+                Layout.fillWidth: true
+                placeholderText: qsTr("对话名称")
+                font.pixelSize: 15
+            }
+        }
+    }
+
+    Dialog {
+        id: historyDeleteDialog
+        title: qsTr("删除对话")
+        anchors.centerIn: parent
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        modal: true
+
+        property int conversationId: -1
+
+        onAccepted: {
+            if (conversationId > 0) {
+                historyManager.deleteConversation(conversationId)
+            }
+        }
+
+        Label {
+            text: qsTr("确定要删除这个对话吗？删除后无法恢复。")
+            font.pixelSize: 14
+            wrapMode: Text.Wrap
+            width: 280
         }
     }
 

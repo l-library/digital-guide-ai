@@ -89,7 +89,7 @@ ApplicationWindow {
     function initAfterLogin() {
         digitalHumanManager.loadDigitalHumans()
         var userId = loginManager.currentUser.id
-        conversationManager.autoLoadOrCreateConversation(userId)
+        conversationManager.startNewConversation(userId, "新对话")
     }
 
     Connections {

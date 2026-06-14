@@ -35,6 +35,26 @@ LoginManager::LoginManager(QObject *parent)
         emit loggedOut();
     });
 
+    connect(&api, &ApiService::profileUpdateResult, this, [this](bool success, QVariantMap updatedUser, const QString &error) {
+        if (success) {
+            m_currentUser["displayName"] = updatedUser["displayName"].toString();
+            m_currentUser["avatarUrl"] = updatedUser.contains("avatarUrl") ? updatedUser["avatarUrl"].toString() : "";
+            emit currentUserChanged();
+            emit profileUpdated(
+                m_currentUser["displayName"].toString(),
+                m_currentUser["avatarUrl"].toString()
+            );
+        }
+    });
+
+    connect(&api, &ApiService::passwordChangeResult, this, [this](bool success, const QString &error) {
+        if (success) {
+            emit passwordChangeSucceeded();
+        } else {
+            emit passwordChangeFailed(error);
+        }
+    });
+
     // 从持久化存储恢复认证信息
     QSettings settings;
     m_storedToken = settings.value("auth/token").toString();
@@ -82,11 +102,11 @@ void LoginManager::logout()
 
 void LoginManager::setLoggedInState(bool loggedIn, const QVariantMap &user)
 {
+    m_currentUser = user;
     if (m_loggedIn != loggedIn) {
         m_loggedIn = loggedIn;
         emit loginStateChanged();
     }
-    m_currentUser = user;
     emit currentUserChanged();
 
     if (loggedIn && m_rememberMe) {
@@ -113,4 +133,16 @@ void LoginManager::clearAuthToken()
     settings.remove("auth/userId");
     settings.remove("auth/displayName");
     settings.remove("auth/role");
+}
+
+void LoginManager::updateProfile(const QString &displayName, const QString &avatarUrl)
+{
+    int userId = m_currentUser["id"].toInt();
+    ApiService::instance().updateUserProfile(userId, displayName, avatarUrl);
+}
+
+void LoginManager::changePassword(const QString &oldPassword, const QString &newPassword)
+{
+    int userId = m_currentUser["id"].toInt();
+    ApiService::instance().changeUserPassword(userId, oldPassword, newPassword);
 }

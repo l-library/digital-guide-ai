@@ -25,6 +25,11 @@ HistoryManager::HistoryManager(QObject *parent)
             emit operationFailed(QStringLiteral("删除对话失败"));
         }
     });
+    connect(&api, &ApiService::conversationRenamed, this, [this](int, const QString &) {
+        if (m_currentUserId > 0) {
+            loadHistory(m_currentUserId);
+        }
+    });
 }
 
 QVariantList HistoryManager::groupedConversations() const
@@ -70,6 +75,11 @@ void HistoryManager::deleteConversation(int conversationId)
         }
     }
     emit historyChanged();
+}
+
+void HistoryManager::renameConversation(int conversationId, const QString &newTitle)
+{
+    ApiService::instance().renameConversation(conversationId, newTitle);
 }
 
 bool HistoryManager::exportConversation(int conversationId, const QString &filePath)

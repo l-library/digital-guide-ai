@@ -193,39 +193,53 @@ Page {
 
                 model: conversationManager ? conversationManager.conversations : null
 
-                delegate: ItemDelegate {
+                delegate: SwipeDelegate {
+                    id: convSwipeDel
                     width: convList.width
                     height: 64
 
                     property bool isCurrent: conversationManager
                                              && modelData.id === conversationManager.currentConversationId
 
-                    Rectangle {
-                        anchors.fill: parent
+                    background: Rectangle {
                         color: isCurrent ? "#E3F2FD" : "transparent"
                     }
 
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 24
-                        anchors.rightMargin: 12
-                        spacing: 12
+                    swipe.left: Rectangle {
+                        width: 72
+                        height: parent.height
+                        color: "#F44336"
+                        Label {
+                            anchors.centerIn: parent
+                            text: qsTr("删除")
+                            color: "white"
+                            font.pixelSize: 14
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: {
+                                convSwipeDel.swipe.close()
+                                deleteConfirmDialog.conversationId = modelData.id
+                                deleteConfirmDialog.open()
+                            }
+                        }
+                    }
+
+                    contentItem: RowLayout {
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 4
+                        spacing: 8
 
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 4
 
-                            RowLayout {
+                            Label {
+                                text: modelData.title || qsTr("未命名对话")
+                                font.pixelSize: 15
+                                font.bold: isCurrent
+                                elide: Label.ElideRight
                                 Layout.fillWidth: true
-                                spacing: 8
-
-                                Label {
-                                    text: modelData.title || qsTr("未命名对话")
-                                    font.pixelSize: 15
-                                    font.bold: isCurrent
-                                    elide: Label.ElideRight
-                                    Layout.fillWidth: true
-                                }
                             }
 
                             Label {
@@ -254,9 +268,9 @@ Page {
                             }
 
                             onClicked: {
-                                renameDialog.conversationId = modelData.id
-                                renameDialog.conversationTitle = modelData.title || ""
-                                renameDialog.open()
+                                convMenu.conversationId = modelData.id
+                                convMenu.conversationTitle = modelData.title || ""
+                                convMenu.popup()
                             }
                         }
                     }
@@ -266,6 +280,30 @@ Page {
                             conversationManager.loadConversation(modelData.id)
                         }
                         drawer.close()
+                    }
+                }
+            }
+
+            Menu {
+                id: convMenu
+                property int conversationId: -1
+                property string conversationTitle: ""
+
+                MenuItem {
+                    text: qsTr("重命名")
+                    font.pixelSize: 14
+                    onTriggered: {
+                        renameDialog.conversationId = convMenu.conversationId
+                        renameDialog.conversationTitle = convMenu.conversationTitle
+                        renameDialog.open()
+                    }
+                }
+                MenuItem {
+                    text: qsTr("删除")
+                    font.pixelSize: 14
+                    onTriggered: {
+                        deleteConfirmDialog.conversationId = convMenu.conversationId
+                        deleteConfirmDialog.open()
                     }
                 }
             }
@@ -415,6 +453,29 @@ Page {
                 wrapMode: Text.Wrap
                 Layout.fillWidth: true
             }
+        }
+    }
+
+    Dialog {
+        id: deleteConfirmDialog
+        title: qsTr("删除对话")
+        anchors.centerIn: parent
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        modal: true
+
+        property int conversationId: -1
+
+        onAccepted: {
+            if (conversationId > 0 && conversationManager) {
+                conversationManager.deleteConversation(conversationId)
+            }
+        }
+
+        Label {
+            text: qsTr("确定要删除这个对话吗？删除后无法恢复。")
+            font.pixelSize: 14
+            wrapMode: Text.Wrap
+            width: 280
         }
     }
 

@@ -41,6 +41,7 @@ def _user_brief(user: User) -> dict:
         "username": user.username,
         "display_name": user.display_name,
         "role": user.role,
+        "avatar_url": user.avatar_url or "",
     }
 
 
@@ -116,7 +117,10 @@ async def verify(current_user: User = Depends(get_current_user)):
         "data": {
             "valid": True,
             "user_id": current_user.id,
+            "username": current_user.username,
+            "display_name": current_user.display_name,
             "role": current_user.role,
+            "avatar_url": current_user.avatar_url or "",
         },
     }
 
@@ -124,3 +128,44 @@ async def verify(current_user: User = Depends(get_current_user)):
 @router.post("/logout")
 async def logout(current_user: User = Depends(get_current_user)):
     return {"code": 200, "message": "已登出", "data": {}}
+
+
+class UpdateProfileRequest(BaseModel):
+    display_name: str = Field(min_length=1, max_length=50)
+    avatar_url: str = Field(max_length=512, default="")
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(min_length=6, max_length=64)
+    new_password: str = Field(min_length=6, max_length=64)
+
+
+@router.put("/profile")
+def update_profile(req: UpdateProfileRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """更新当前用户的个人资料（昵称和头像）"""
+    current_user.display_name = req.display_name
+    current_user.avatar_url = req.avatar_url
+    db.commit()
+    db.refresh(current_user)
+    return {
+        "code": 200,
+        "message": "个人资料已更新",
+        "data": _user_brief(current_user),
+    }
+
+
+@router.put("/password")
+def change_password(req: ChangePasswordRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """修改当前用户的密码"""
+    if not verify_password(req.old_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="旧密码不正确",
+        )
+    current_user.password_hash = hash_password(req.new_password)
+    db.commit()
+    return {
+        "code": 200,
+        "message": "密码已修改",
+        "data": {},
+    }
