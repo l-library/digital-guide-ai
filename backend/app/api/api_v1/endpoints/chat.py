@@ -39,6 +39,23 @@ class SimpleChatRequest(BaseModel):
     question: str
 
 
+# ─── 后台标题生成辅助函数 ──────────────────────────────────────────────────────
+
+
+async def _generate_title_bg(conv_id: int, user_text: str, assistant_text: str):
+    """后台异步生成对话标题，不阻塞主流程"""
+    try:
+        from app.database import SessionLocal
+        db = SessionLocal()
+        title = await generate_title_async(user_text, assistant_text)
+        conv = db.query(Conversation).filter(Conversation.id == conv_id).first()
+        if conv:
+            conv.title = title
+            db.commit()
+        db.close()
+    except Exception:
+        pass
+
 
 # ─── 流式文本问答 ──────────────────────────────────────────────────────────────
 
@@ -109,20 +126,14 @@ async def stream_chat(req: ChatTextRequest):
 
             yield f"data: {json.dumps({'type': 'done', 'conversation_id': req.conversation_id, 'message_id': assistant_msg.id, 'full_content': full_content, 'knowledge_sources': ['景区知识库'] if context_list else [], 'audio_url': audio_url}, ensure_ascii=False)}\n\n"
 
-            # 第一轮对话结束后自动生成标题
+            # 第一轮对话结束后自动生成标题（后台执行，不阻塞SSE流）
             msg_count = (
                 db.query(func.count(Message.id))
                 .filter(Message.conversation_id == req.conversation_id)
                 .scalar()
             )
             if msg_count <= 2:
-                try:
-                    title = await generate_title_async(req.content, full_content)
-                    conv.title = title
-                    db.commit()
-                    yield f"data: {json.dumps({'type': 'title_updated', 'conversation_id': req.conversation_id, 'title': title}, ensure_ascii=False)}\n\n"
-                except Exception as e:
-                    print(f"[标题生成失败] conversation_id={req.conversation_id}: {e}")
+                asyncio.create_task(_generate_title_bg(req.conversation_id, req.content, full_content))
 
             db.close()
 
@@ -155,8 +166,26 @@ async def handle_text_chat_with_persistence(
     db.commit()
 
     context_list = retrieve_context(user_text)
-    prompt = build_prompt(user_text, context_list)
-    answer_text = generate(prompt)
+
+    # 加载对话历史（含刚保存的用户消息），构建多轮消息列表
+    history_msgs = (
+        db.query(Message)
+        .filter(Message.conversation_id == req.conversation_id)
+        .order_by(Message.created_at)
+        .all()
+    )
+    messages_for_llm = build_llm_messages(
+        history_msgs, user_text, context_list
+    )
+
+    pipeline = create_streaming_pipeline(
+        req.conversation_id, req.response_type, messages_for_llm
+    )
+    answer_text = ""
+    async for event in pipeline:
+        if event["type"] == "_pipeline_done":
+            answer_text = event["full_content"]
+            break
 
     audio_url = None
     if req.response_type == 1:
@@ -181,21 +210,14 @@ async def handle_text_chat_with_persistence(
     db.commit()
     db.refresh(assistant_msg)
 
-    # 第一轮对话结束后自动生成标题
+    # 第一轮对话结束后自动生成标题（后台执行，不阻塞响应）
     msg_count = (
         db.query(func.count(Message.id))
         .filter(Message.conversation_id == req.conversation_id)
         .scalar()
     )
-    title_updated = None
     if msg_count <= 2:
-        try:
-            title = await generate_title_async(user_text, answer_text)
-            conv.title = title
-            db.commit()
-            title_updated = title
-        except Exception as e:
-            print(f"[标题生成失败] conversation_id={req.conversation_id}: {e}")
+        asyncio.create_task(_generate_title_bg(req.conversation_id, user_text, answer_text))
 
     return {
         "code": 200,
@@ -207,7 +229,7 @@ async def handle_text_chat_with_persistence(
             "content": answer_text,
             "audio_url": audio_url,
             "knowledge_sources": ["景区知识库"] if context_list else [],
-            "title_updated": title_updated,
+            "title_updated": None,
         },
     }
 
@@ -317,20 +339,14 @@ async def handle_voice_chat(
 
                 yield f"data: {json.dumps({'type': 'done', 'conversation_id': conversation_id, 'message_id': assistant_msg.id, 'full_content': full_content, 'knowledge_sources': knowledge_sources, 'audio_url': audio_url}, ensure_ascii=False)}\n\n"
 
-                # 第一轮对话结束后自动生成标题
+                # 第一轮对话结束后自动生成标题（后台执行，不阻塞SSE流）
                 msg_count = (
                     db.query(func.count(Message.id))
                     .filter(Message.conversation_id == conversation_id)
                     .scalar()
                 )
                 if msg_count <= 2:
-                    try:
-                        title = await generate_title_async(user_text, full_content)
-                        conv.title = title
-                        db.commit()
-                        yield f"data: {json.dumps({'type': 'title_updated', 'conversation_id': conversation_id, 'title': title}, ensure_ascii=False)}\n\n"
-                    except Exception as e:
-                        print(f"[标题生成失败] conversation_id={conversation_id}: {e}")
+                    asyncio.create_task(_generate_title_bg(conversation_id, user_text, full_content))
 
             except Exception:
                 db.rollback()
@@ -432,20 +448,14 @@ async def handle_voice_stream(
 
                 yield f"data: {json.dumps({'type': 'done', 'conversation_id': conversation_id, 'message_id': assistant_msg.id, 'full_content': full_content, 'knowledge_sources': knowledge_sources, 'audio_url': audio_url}, ensure_ascii=False)}\n\n"
 
-                # 自动标题：首轮对话后生成
+                # 自动标题：首轮对话后生成（后台执行，不阻塞SSE流）
                 msg_count = (
                     db.query(func.count(Message.id))
                     .filter(Message.conversation_id == conversation_id)
                     .scalar()
                 )
                 if msg_count <= 2:
-                    try:
-                        title = await generate_title_async(user_text, full_content)
-                        conv.title = title
-                        db.commit()
-                        yield f"data: {json.dumps({'type': 'title_updated', 'conversation_id': conversation_id, 'title': title}, ensure_ascii=False)}\n\n"
-                    except Exception as e:
-                        print(f"[标题生成失败] conversation_id={conversation_id}: {e}")
+                    asyncio.create_task(_generate_title_bg(conversation_id, user_text, full_content))
 
             except Exception:
                 db.rollback()

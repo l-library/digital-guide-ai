@@ -232,6 +232,9 @@ void ConversationManager::sendVoiceMessage(const QString &audioFilePath)
 void ConversationManager::loadConversation(int conversationId)
 {
     m_pendingNewConversation = false;
+    if (!ApiService::instance().isWebSocketConnected()) {
+        ApiService::instance().connectWebSocket();
+    }
     m_pendingMessages.clear();
     clearAudioQueue();
     m_currentConversationId = conversationId;
@@ -302,6 +305,9 @@ void ConversationManager::loadConversationList(int userId)
 void ConversationManager::autoLoadOrCreateConversation(int userId)
 {
     m_currentUserId = userId;
+    if (!ApiService::instance().isWebSocketConnected()) {
+        ApiService::instance().connectWebSocket();
+    }
     m_autoLoadPending = true;
     ApiService::instance().loadConversations(userId);
 }
@@ -492,6 +498,13 @@ void ConversationManager::playNextSentence()
     // 兜底超时：duration 基础上加 3 秒余量，覆盖前向 HTTP 链路与起播抖动
     const int watchdogMs = static_cast<int>((item.duration + 3.0) * 1000);
     m_playbackWatchdog.start(watchdogMs);
+
+    // 预缓冲下一句：提前发送下一句音频到 LiveTalking，减少句间等待
+    if (m_currentAudioIndex < m_audioQueue.size()) {
+        const SentenceAudioItem nextItem = m_audioQueue.at(m_currentAudioIndex);
+        ApiService::instance().playAudio(m_activeConversationId, nextItem.audioFilename);
+        qDebug() << "SentenceAudioQueue: pre-buffering next sentence index=" << nextItem.index;
+    }
 }
 
 void ConversationManager::advancePlayback()

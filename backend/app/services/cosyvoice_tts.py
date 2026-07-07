@@ -1,8 +1,8 @@
 """
 CosyVoice TTS 线程安全封装。
 
-使用 CosyVoice 的 AutoModel 进行语音合成，通过 asyncio.Lock 保证
-GPU 推理的互斥访问（AutoModel.inference_sft() 非线程安全）。
+使用 CosyVoice 的 AutoModel 进行语音合成，通过 asyncio.Semaphore(2) 控制
+GPU 推理并发数（最多 2 个并行推理，平衡吞吐量和显存占用）。
 """
 
 import asyncio
@@ -52,7 +52,7 @@ class CosyVoiceTTS:
         self._model = None
         self.sample_rate: int = 0
 
-        self._lock = asyncio.Lock()
+        self._lock = asyncio.Semaphore(2)
 
     def load(self) -> None:
         """加载 CosyVoice AutoModel。
@@ -125,7 +125,7 @@ class CosyVoiceTTS:
     ) -> bool:
         """异步安全地将语音合成结果写入 WAV 文件。
 
-        内部通过 asyncio.Lock 保证同一时间只有一个 GPU 推理在进行。
+        内部通过 asyncio.Semaphore(2) 控制最多 2 个 GPU 推理并行执行。
 
         Args:
             text: 待合成文本

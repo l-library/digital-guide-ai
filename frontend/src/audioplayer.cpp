@@ -1,4 +1,5 @@
 #include "audioplayer.h"
+#include "apiservice.h"
 
 #include <QUrl>
 #include <QDebug>
@@ -55,7 +56,10 @@ void AudioPlayer::play(const QString &audioUrl)
 
     QString fullUrl = audioUrl;
     if (!audioUrl.startsWith("http")) {
-        fullUrl = QStringLiteral("http://localhost:8000") + audioUrl;
+        // 使用与 ApiService 相同的配置读取后端地址
+        QString backendBase = ConfigManager::getBackendIP() + ":"
+                            + QString::number(ConfigManager::getBackendPort());
+        fullUrl = backendBase + audioUrl;
     }
 
     qDebug() << "AudioPlayer: playing" << fullUrl;

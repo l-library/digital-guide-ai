@@ -74,6 +74,7 @@ void ApiService::login(const QString &username, const QString &password)
 {
     QUrl url(BASE_URL + "/api/v1/auth/login");
     QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     QJsonObject body;
@@ -111,6 +112,7 @@ void ApiService::registerUser(const QString &username, const QString &password,
 {
     QUrl url(BASE_URL + "/api/v1/auth/register");
     QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     QJsonObject body;
@@ -148,6 +150,7 @@ void ApiService::updateUserProfile(int userId, const QString &displayName, const
 {
     QUrl url(BASE_URL + "/api/v1/auth/profile");
     QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
@@ -185,6 +188,7 @@ void ApiService::changeUserPassword(int userId, const QString &oldPassword, cons
 {
     QUrl url(BASE_URL + "/api/v1/auth/password");
     QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
@@ -220,6 +224,7 @@ void ApiService::checkAutoLogin(const QString &token, int userId)
     }
     QUrl url(BASE_URL + "/api/v1/auth/verify");
     QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
     req.setRawHeader("Authorization", ("Bearer " + token).toUtf8());
 
     QNetworkReply *reply = m_networkManager->get(req);
@@ -255,6 +260,7 @@ void ApiService::validateToken(const QString &token, int userId)
     }
     QUrl url(BASE_URL + "/api/v1/auth/verify");
     QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
     req.setRawHeader("Authorization", ("Bearer " + token).toUtf8());
 
     QNetworkReply *reply = m_networkManager->get(req);
@@ -286,6 +292,7 @@ void ApiService::logout(int userId)
     Q_UNUSED(userId)
     QUrl url(BASE_URL + "/api/v1/auth/logout");
     QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
@@ -303,6 +310,7 @@ void ApiService::logout(int userId)
 void ApiService::createConversation(int userId, const QString &title, int knowledgeDocId)
 {
     QNetworkRequest req(QUrl(BASE_URL + "/api/v1/conversations"));
+    req.setTransferTimeout(15000);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     QJsonObject body;
@@ -331,7 +339,9 @@ void ApiService::loadConversations(int userId)
     query.addQueryItem("user_id", QString::number(userId));
     url.setQuery(query);
 
-    QNetworkReply *reply = m_networkManager->get(QNetworkRequest(url));
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    QNetworkReply *reply = m_networkManager->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
@@ -365,7 +375,9 @@ void ApiService::loadConversationsGroupedByDate(int userId)
     query.addQueryItem("user_id", QString::number(userId));
     url.setQuery(query);
 
-    QNetworkReply *reply = m_networkManager->get(QNetworkRequest(url));
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    QNetworkReply *reply = m_networkManager->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
@@ -404,7 +416,9 @@ void ApiService::loadConversationsGroupedByDate(int userId)
 void ApiService::deleteConversation(int conversationId)
 {
     QUrl url(BASE_URL + "/api/v1/conversations/" + QString::number(conversationId));
-    QNetworkReply *reply = m_networkManager->deleteResource(QNetworkRequest(url));
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    QNetworkReply *reply = m_networkManager->deleteResource(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         bool success = (reply->error() == QNetworkReply::NoError);
@@ -419,6 +433,7 @@ void ApiService::renameConversation(int conversationId, const QString &newTitle)
 {
     QUrl url(BASE_URL + "/api/v1/conversations/" + QString::number(conversationId));
     QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     QJsonObject body;
@@ -440,7 +455,9 @@ void ApiService::loadMessages(int conversationId)
 {
     QUrl url(BASE_URL + "/api/v1/conversations/" + QString::number(conversationId) + "/messages/all");
 
-    QNetworkReply *reply = m_networkManager->get(QNetworkRequest(url));
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    QNetworkReply *reply = m_networkManager->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply, conversationId]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
@@ -759,6 +776,10 @@ void ApiService::uploadKnowledgeDoc(int userId, const QString &title, const QStr
     multiPart->append(userIdPart);
 
     QNetworkRequest req(QUrl(BASE_URL + "/api/v1/admin/knowledge-docs"));
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    req.setTransferTimeout(30000);
     QNetworkReply *reply = m_networkManager->post(req, multiPart);
     multiPart->setParent(reply);
 
@@ -792,6 +813,7 @@ void ApiService::uploadKnowledgeDoc(int userId, const QString &title, const QStr
 void ApiService::deleteKnowledgeDoc(int docId)
 {
     QNetworkRequest req(QUrl(BASE_URL + "/api/v1/admin/knowledge-docs/" + QString::number(docId)));
+    req.setTransferTimeout(15000);
     QNetworkReply *reply = m_networkManager->deleteResource(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
@@ -806,6 +828,7 @@ void ApiService::deleteKnowledgeDoc(int docId)
 void ApiService::loadKnowledgeDocs(int)
 {
     QNetworkRequest req(QUrl(BASE_URL + "/api/v1/admin/knowledge-docs"));
+    req.setTransferTimeout(15000);
     QNetworkReply *reply = m_networkManager->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
@@ -847,19 +870,73 @@ void ApiService::loadKnowledgeDocs(int)
 
 void ApiService::loadDigitalHumans()
 {
-    QTimer::singleShot(0, this, [this]() {
-        emit digitalHumansLoaded(m_stubDigitalHumans);
+    QNetworkRequest req(QUrl(BASE_URL + "/api/v1/admin/digital-humans"));
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    req.setTransferTimeout(15000);
+
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "loadDigitalHumans error:" << reply->errorString();
+            // Fall back to stub data on network error
+            emit digitalHumansLoaded(m_stubDigitalHumans);
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        QJsonArray items;
+        if (resp.contains("items")) {
+            items = resp["items"].toArray();
+        } else if (resp.contains("data") && resp["data"].isObject()) {
+            items = resp["data"].toObject()["items"].toArray();
+        }
+
+        QVariantList dhs;
+        for (const QJsonValue &val : items) {
+            QJsonObject obj = val.toObject();
+            QVariantMap dh;
+            dh["id"] = obj["digital_human_id"].toInt();
+            dh["name"] = obj["name"].toString();
+            dh["description"] = obj["description"].toString();
+            dh["avatarUrl"] = obj["avatar_url"].toString();
+            dh["isDefault"] = obj["is_default"].toBool();
+            dhs.append(dh);
+        }
+
+        if (dhs.isEmpty()) {
+            // Fall back to stub data if API returns empty
+            emit digitalHumansLoaded(m_stubDigitalHumans);
+        } else {
+            emit digitalHumansLoaded(dhs);
+        }
     });
 }
 
 void ApiService::setDefaultDigitalHuman(int dhId)
 {
-    for (auto &dh : m_stubDigitalHumans) {
-        QVariantMap dhm = dh.toMap();
-        dhm["isDefault"] = (dhm["id"].toInt() == dhId);
-        dh = dhm;
+    QUrl url(BASE_URL + "/api/v1/admin/digital-humans/" + QString::number(dhId) + "/default");
+    QNetworkRequest req(url);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
-    QTimer::singleShot(0, this, [this]() {
+    req.setTransferTimeout(15000);
+
+    QNetworkReply *reply = m_networkManager->put(req, QByteArray());
+    connect(reply, &QNetworkReply::finished, this, [this, reply, dhId]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "setDefaultDigitalHuman error:" << reply->errorString();
+            emit defaultDigitalHumanSet(false);
+            return;
+        }
+        // Update local stub data to reflect the change
+        for (auto &dh : m_stubDigitalHumans) {
+            QVariantMap dhm = dh.toMap();
+            dhm["isDefault"] = (dhm["id"].toInt() == dhId);
+            dh = dhm;
+        }
         emit defaultDigitalHumanSet(true);
     });
 }
@@ -868,6 +945,7 @@ void ApiService::registerLiveTalkingSession(int conversationId, const QString &s
 {
     QUrl url(BASE_URL + "/api/v1/digital-human/register_session");
     QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     QJsonObject body;
@@ -906,6 +984,7 @@ void ApiService::exportConversation(int conversationId)
 void ApiService::playAudio(int conversationId, const QString &audioFilename)
 {
     QNetworkRequest request(QUrl(BASE_URL + "/api/v1/play-audio"));
+    request.setTransferTimeout(15000);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
 
     QJsonObject body;
