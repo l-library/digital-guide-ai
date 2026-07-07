@@ -63,6 +63,8 @@ signals:
     void sessionCreated(const QString &sessionId);
     void conversationIdChanged();
     void errorOccurred(const QString &error);
+    // LiveTalking 上报 eventpoint==2：当前句的口型/语音真正播完。
+    void speakingFinished();
 
 private slots:
     void onConnected();

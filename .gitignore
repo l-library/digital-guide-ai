@@ -67,6 +67,7 @@ frontend/build/
 .claude/
 .sisyphus/
 .opencode/
+.omo/
 
 # 临时导出的项目结构
 /project_structure.txt

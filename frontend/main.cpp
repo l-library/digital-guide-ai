@@ -56,5 +56,10 @@ int main(int argc, char *argv[])
     int ltPort = ConfigManager::getLiveTalkingPort();
     liveTalkingClient.connectToServer(ltHost, ltPort);
 
+    // 数字人逐句推进：LiveTalking 真正播完一句(eventpoint==2)再发下一句，
+    // 取代原先按 wall-clock 估时推进，消除句间不同步导致的视频卡顿。
+    QObject::connect(&liveTalkingClient, &LiveTalkingClient::speakingFinished,
+                     &conversationManager, &ConversationManager::advancePlayback);
+
     return QCoreApplication::exec();
 }

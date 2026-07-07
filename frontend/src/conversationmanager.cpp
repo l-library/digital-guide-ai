@@ -147,6 +147,11 @@ ConversationManager::ConversationManager(QObject *parent)
 
     connect(&api, &ApiService::sentenceAudioReceived,
             this, &ConversationManager::enqueueSentenceAudio);
+
+    // 兜底定时器：若 LiveTalking 未在 duration+3s 内回报本句播完，主动推进
+    m_playbackWatchdog.setSingleShot(true);
+    connect(&m_playbackWatchdog, &QTimer::timeout,
+            this, &ConversationManager::advancePlayback);
 }
 
 int ConversationManager::currentConversationId() const
@@ -463,6 +468,8 @@ void ConversationManager::playNextSentence()
     if (m_currentAudioIndex >= m_audioQueue.size()) {
         qDebug() << "SentenceAudioQueue: queue exhausted, waiting for more sentences";
         m_playbackActive = false;
+        emit playbackActiveChanged();
+        emit allSentencesPlayed();
         return;
     }
 
@@ -471,15 +478,31 @@ void ConversationManager::playNextSentence()
         emit playbackActiveChanged();
     }
 
-    const SentenceAudioItem &item = m_audioQueue.at(m_currentAudioIndex);
+    // 用拷贝避免后续队列变动导致引用失效
+    const SentenceAudioItem item = m_audioQueue.at(m_currentAudioIndex);
     qDebug() << "SentenceAudioQueue: playing index=" << item.index
              << "audio=" << item.audioFilename;
 
     ApiService::instance().playAudio(m_activeConversationId, item.audioFilename);
 
-    int delayMs = static_cast<int>((item.duration + 0.05) * 1000);
     m_currentAudioIndex++;
-    QTimer::singleShot(delayMs, this, &ConversationManager::playNextSentence);
+    // 标记「等待本句播完」，由 LiveTalking 的 speakingFinished 或 watchdog 推进
+    m_pendingPlaybackConfirm = true;
+
+    // 兜底超时：duration 基础上加 3 秒余量，覆盖前向 HTTP 链路与起播抖动
+    const int watchdogMs = static_cast<int>((item.duration + 3.0) * 1000);
+    m_playbackWatchdog.start(watchdogMs);
+}
+
+void ConversationManager::advancePlayback()
+{
+    if (!m_pendingPlaybackConfirm) {
+        // 已被另一路推进过 —— 后到的 watchdog/finished 一律忽略
+        return;
+    }
+    m_pendingPlaybackConfirm = false;
+    m_playbackWatchdog.stop();
+    playNextSentence();
 }
 
 void ConversationManager::clearAudioQueue()
@@ -487,6 +510,8 @@ void ConversationManager::clearAudioQueue()
     m_audioQueue.clear();
     m_currentAudioIndex = 0;
     m_activeConversationId = 0;
+    m_pendingPlaybackConfirm = false;
+    m_playbackWatchdog.stop();
     if (m_playbackActive) {
         m_playbackActive = false;
         emit playbackActiveChanged();

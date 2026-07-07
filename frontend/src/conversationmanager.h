@@ -57,6 +57,9 @@ public:
 public slots:
     void enqueueSentenceAudio(int conversationId, int index, const QString &text,
                                const QString &audioFilename, double duration);
+    // 由 LiveTalking 的 speakingFinished 信号触发，或由 watchdog 兜底推进。
+    // 内部用 m_pendingPlaybackConfirm 做去重，避免双推进跳句。
+    void advancePlayback();
 
 signals:
     void currentConversationChanged();
@@ -101,6 +104,13 @@ private:
     int m_currentAudioIndex = 0;
     int m_activeConversationId = 0;
     bool m_playbackActive = false;
+
+    // 逐句播放的兜底定时器：在 LiveTalking 未回报 speakingFinished 时
+    // 按 duration+3s 主动推进，避免永远卡死。
+    QTimer m_playbackWatchdog;
+    // 当前是否在等待 LiveTalking 回报本句播完；
+    // 任何一路（finished / watchdog）先到即推进，后到者被忽略。
+    bool m_pendingPlaybackConfirm = false;
 
     void appendMessage(const QString &role, const QString &content);
     void updateLastAiMessageContent(const QString &token);

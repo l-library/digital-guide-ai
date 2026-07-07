@@ -29,7 +29,7 @@ QImage LiveTalkingImageProvider::requestImage(const QString &id, QSize *size, co
         *size = frame.size();
     }
     if (requestedSize.isValid() && !requestedSize.isEmpty()) {
-        return frame.scaled(requestedSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        return frame.scaled(requestedSize, Qt::KeepAspectRatio, Qt::FastTransformation);
     }
     return frame;
 }
@@ -334,6 +334,9 @@ void LiveTalkingClient::processAudioFrame(const QByteArray &payload)
     if (eventpointCode == 1) {
         if (!m_speaking) {
             m_speaking = true;
+            // 清空旧句的视频缓冲，但保留 m_currentFrame 不动——
+            // 过渡期间 QML 继续显示上一句最后一帧，新句视频帧到达后
+            // 在下一个显示周期（≤40ms）内接上，音画不同步极小。
             m_videoFrameBuffer.clear();
             emit speakingChanged();
         }
@@ -341,6 +344,8 @@ void LiveTalkingClient::processAudioFrame(const QByteArray &payload)
         if (m_speaking) {
             m_speaking = false;
             emit speakingChanged();
+            // 当前句播完，通知 ConversationManager 推进下一句
+            emit speakingFinished();
         }
     }
 
