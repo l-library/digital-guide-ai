@@ -1,7 +1,8 @@
-"""TTS 流式播报共享模块：逐句合成 + 严格串行播报
+"""TTS 流式播报共享模块：逐句合成 + 即时交付
 
 chat.py / websocket.py 共用的 TTS 流式播报基础设施。
-设计：TTS 合成并发执行，播报按 LLM 输出顺序严格串行。
+设计：TTS 合成与 LLM 流式并行执行，合成完成后 sentence_audio 事件
+在 LLM 生成期间即流式 yield 给前端，前端无需等待 LLM 全部生成完。
 """
 
 import asyncio
@@ -9,6 +10,7 @@ import asyncio
 import os
 import re
 import subprocess
+import time
 import uuid
 from app.services.tts_service import synthesize_to_file
 from app.services.llm_service import generate_stream_async
@@ -48,10 +50,18 @@ async def send_audio_to_livetalking(conversation_id: int, audio_filename: str):
     filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
     if not os.path.exists(filepath):
         return
+    t0 = time.monotonic()
     try:
         with open(filepath, "rb") as f:
             audio_bytes = f.read()
+        t_read = time.monotonic()
         await get_dh_client().send_audio(sessionid, audio_bytes)
+        t_push = time.monotonic()
+        print(
+            f"[LiveTalking推送] conv={conversation_id} "
+            f"文件读取={t_read - t0:.3f}s LiveTalking POST={t_push - t_read:.3f}s "
+            f"总耗时={t_push - t0:.3f}s"
+        )
     except Exception as e:
         print(f"[LiveTalking音频推送失败] conversation_id={conversation_id}: {e}")
 
@@ -81,28 +91,6 @@ async def synthesize_and_resolve(
 
 
 
-async def _synthesize_single(
-    text: str,
-    idx: int,
-) -> dict | None:
-    """合成单句 TTS，返回 {idx, text, audio_filename, duration} 或 None"""
-    try:
-        audio_filename = await synthesize_to_file(text, TEMP_AUDIO_DIR)
-        if not audio_filename:
-            return None
-        filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
-        duration = get_wav_duration(filepath)
-        return {
-            "idx": idx,
-            "text": text,
-            "audio_filename": audio_filename,
-            "duration": round(duration, 2),
-        }
-    except Exception as e:
-        print(f"[逐句TTS合成失败] idx={idx}: {e}")
-        return None
-
-
 async def create_streaming_pipeline(
     conversation_id: int,
     response_type: int,
@@ -112,6 +100,10 @@ async def create_streaming_pipeline(
 
     chat.py / websocket.py 通过 async for 迭代消费事件，
     消除重复的流式循环代码。
+
+    TTS 合成与 LLM 流式并行：句子检测后立即 asyncio.create_task 启动 TTS，
+    TTS 完成后 sentence_audio 事件在 LLM 生成期间就流式 yield 给前端，
+    前端无需等待 LLM 全部生成完即可开始播放第一句音频。
 
     生成的事件字典类型：token / sentence / sentence_audio / error / _pipeline_done
     所有事件均包含 conversation_id 字段。
@@ -128,8 +120,52 @@ async def create_streaming_pipeline(
     """
     full_content = ""
     sentence_buffer = ""
-    tts_tasks: list[tuple[str, int, asyncio.Task]] = []
+    tts_tasks: list[asyncio.Task] = []
+    tts_results: dict[int, dict | None] = {}
+    next_yield_idx = 0
+    sentence_wavs: list[str | None] = []
     idx = 0
+    pipeline_start = time.monotonic()
+
+    async def _synthesize_and_store(text: str, task_idx: int):
+        """合成单句 TTS，结果存入 tts_results 字典供主循环按序 yield"""
+        try:
+            audio_filename = await synthesize_to_file(text, TEMP_AUDIO_DIR)
+            if not audio_filename:
+                tts_results[task_idx] = None
+                return
+            filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
+            duration = get_wav_duration(filepath)
+            tts_results[task_idx] = {
+                "idx": task_idx,
+                "text": text,
+                "audio_filename": audio_filename,
+                "duration": round(duration, 2),
+            }
+        except Exception as e:
+            print(f"[逐句TTS合成失败] idx={task_idx}: {e}")
+            tts_results[task_idx] = None
+
+    def _drain_completed() -> list[dict]:
+        """按序提取已完成的 TTS 结果，组装 sentence_audio 事件列表（非阻塞）"""
+        nonlocal next_yield_idx
+        events: list[dict] = []
+        while next_yield_idx in tts_results:
+            result = tts_results.pop(next_yield_idx)
+            if result is not None:
+                events.append({
+                    "type": "sentence_audio",
+                    "conversation_id": conversation_id,
+                    "index": result["idx"],
+                    "text": result["text"],
+                    "audio_filename": result["audio_filename"],
+                    "duration": result["duration"],
+                })
+                sentence_wavs.append(result["audio_filename"])
+            else:
+                sentence_wavs.append(None)
+            next_yield_idx += 1
+        return events
 
     try:
         async for token in generate_stream_async(messages_for_llm):
@@ -151,9 +187,22 @@ async def create_streaming_pipeline(
                         "index": idx,
                     }
                     if response_type == 1:
-                        tts_tasks.append(asyncio.create_task(_synthesize_single(s, idx)))
+                        tts_tasks.append(
+                            asyncio.create_task(_synthesize_and_store(s, idx))
+                        )
                     idx += 1
                 sentence_buffer = ""
+
+            # 流式交付：LLM 生成期间，按序 yield 已完成的 TTS 音频
+            # 前端无需等待 LLM 全部生成完即可开始播放
+            if response_type == 1:
+                for event in _drain_completed():
+                    elapsed = time.monotonic() - pipeline_start
+                    print(
+                        f"[TTS流式] 句{event['index']}音频已交付，"
+                        f"耗时 {elapsed:.2f}s（pipeline 启动至今）"
+                    )
+                    yield event
 
         # 处理缓冲区中剩余文本
         if sentence_buffer.strip():
@@ -165,34 +214,25 @@ async def create_streaming_pipeline(
                 "index": idx,
             }
             if response_type == 1:
-                tts_tasks.append(asyncio.create_task(_synthesize_single(s, idx)))
+                tts_tasks.append(asyncio.create_task(_synthesize_and_store(s, idx)))
             idx += 1
 
-        # Phase 2: 逐个等待 TTS 完成，按序 yield sentence_audio 事件
-        # 大部分任务在 LLM 流式期间已完成，await 立即返回
-        sentence_wavs: list[str | None] = []
+        # LLM 结束后，逐个等待 TTS 完成，按序 yield
+        # 用 asyncio.wait(FIRST_COMPLETED) 而非 gather，避免等待所有任务
+        # 才交付——先完成的先交付给前端
         if tts_tasks:
-            for task in tts_tasks:
-                try:
-                    result = await task
-                except Exception as e:
-                    print(f"[TTS] synthesis task failed: {e}")
-                    sentence_wavs.append(None)
-                    continue
-                if result is not None:
-                    yield {
-                        "type": "sentence_audio",
-                        "conversation_id": conversation_id,
-                        "index": result["idx"],
-                        "text": result["text"],
-                        "audio_filename": result["audio_filename"],
-                        "duration": result["duration"],
-                    }
-                    sentence_wavs.append(result["audio_filename"])
-                else:
-                    sentence_wavs.append(None)
-        else:
-            sentence_wavs = []
+            pending = set(tts_tasks)
+            while pending:
+                done, pending = await asyncio.wait(
+                    pending, return_when=asyncio.FIRST_COMPLETED
+                )
+                for event in _drain_completed():
+                    elapsed = time.monotonic() - pipeline_start
+                    print(
+                        f"[TTS流式] 句{event['index']}音频已交付（LLM结束后），"
+                        f"耗时 {elapsed:.2f}s"
+                    )
+                    yield event
 
     except Exception as e:
         yield {

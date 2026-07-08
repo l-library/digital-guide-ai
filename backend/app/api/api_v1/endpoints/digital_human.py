@@ -106,8 +106,13 @@ async def play_audio(req: PlayAudioRequest):
 
     前端逐句调用此端点，播放顺序由前端 QTimer 控制。
     """
+    import time
+
+    t0 = time.monotonic()
     from app.services.tts_streaming import send_audio_to_livetalking
     await send_audio_to_livetalking(req.conversation_id, req.audio_filename)
+    elapsed = time.monotonic() - t0
+    print(f"[play-audio] conv={req.conversation_id} file={req.audio_filename} 总耗时={elapsed:.3f}s")
     return {"code": 200, "message": "ok"}
 
 
