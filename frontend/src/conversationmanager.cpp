@@ -499,12 +499,9 @@ void ConversationManager::playNextSentence()
     const int watchdogMs = static_cast<int>((item.duration + 3.0) * 1000);
     m_playbackWatchdog.start(watchdogMs);
 
-    // 预缓冲下一句：提前发送下一句音频到 LiveTalking，减少句间等待
-    if (m_currentAudioIndex < m_audioQueue.size()) {
-        const SentenceAudioItem nextItem = m_audioQueue.at(m_currentAudioIndex);
-        ApiService::instance().playAudio(m_activeConversationId, nextItem.audioFilename);
-        qDebug() << "SentenceAudioQueue: pre-buffering next sentence index=" << nextItem.index;
-    }
+    // 不预缓冲下一句：同时向 LiveTalking 提交两段音频会触发口型网络
+    // 并发推理，抢占本句的 GPU/CPU 算力，导致本句视频帧到达抖动 → 画面卡顿。
+    // 严格依赖 speakingFinished(eventpoint==2) → advancePlayback() 串行推进。
 }
 
 void ConversationManager::advancePlayback()

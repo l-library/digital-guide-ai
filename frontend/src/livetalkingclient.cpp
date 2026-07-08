@@ -276,9 +276,10 @@ void LiveTalkingClient::processVideoFrame(const QByteArray &payload)
     QByteArray jpegData = payload.mid(4);
 
     m_videoFrameBuffer.append(jpegData);
-    if (m_videoFrameBuffer.size() > 200) {
-        m_videoFrameBuffer.erase(m_videoFrameBuffer.begin(),
-            m_videoFrameBuffer.begin() + m_videoFrameBuffer.size() - 100);
+    // 缓冲上限约 1 秒（30 帧）。逐帧丢弃最旧帧，避免一次性批量 erase
+    // 导致的"快进跳帧"——视频动画看起来卡住的常见原因。
+    if (m_videoFrameBuffer.size() > 30) {
+        m_videoFrameBuffer.removeFirst();
     }
     if (!m_displayTimer->isActive()) {
         m_displayTimer->start();
@@ -292,34 +293,32 @@ void LiveTalkingClient::onDisplayTimerTick()
     }
 
     qint64 now = QDateTime::currentMSecsSinceEpoch();
-    qint64 elapsed = m_lastDisplayTime > 0 ? now - m_lastDisplayTime : 40;
+    qint64 elapsed = m_lastDisplayTime > 0 ? now - m_lastDisplayTime : 33;
 
-    if (elapsed < 40) {
+    // 30fps 节流（33ms/帧）。tick 间隔（10ms）小于此阈值，
+    // 早期返回由 elapsed 过滤，保证不漏 tick 且不超采。
+    if (elapsed < 33) {
         return;
     }
 
-    int framesToShow = qMin((int)(elapsed / 40), m_videoFrameBuffer.size());
+    // 每次 tick 最多显示 1 帧。即使缓冲积压也只取 1 帧，
+    // 让积压在后续 tick 平滑消化，避免一次性"快进"跳帧。
+    QByteArray jpegData = m_videoFrameBuffer.takeFirst();
+    m_lastDisplayTime = now;
 
-    for (int i = 0; i < framesToShow; i++) {
-        QByteArray jpegData = m_videoFrameBuffer.takeFirst();
-
-        if (i == framesToShow - 1) {
-            QImage frame;
-            if (frame.loadFromData(jpegData, "JPEG")) {
-                QMutexLocker locker(&m_frameMutex);
-                m_frameCount++;
-                bool sizeChanged = (m_frameWidth != frame.width() || m_frameHeight != frame.height());
-                m_frameWidth = frame.width();
-                m_frameHeight = frame.height();
-                m_currentFrame = frame;
-                if (sizeChanged) {
-                    emit frameSizeChanged();
-                }
-            }
-            emit frameUpdated();
+    QImage frame;
+    if (frame.loadFromData(jpegData, "JPEG")) {
+        QMutexLocker locker(&m_frameMutex);
+        m_frameCount++;
+        bool sizeChanged = (m_frameWidth != frame.width() || m_frameHeight != frame.height());
+        m_frameWidth = frame.width();
+        m_frameHeight = frame.height();
+        m_currentFrame = frame;
+        if (sizeChanged) {
+            emit frameSizeChanged();
         }
     }
-    m_lastDisplayTime = now;
+    emit frameUpdated();
 }
 
 void LiveTalkingClient::processAudioFrame(const QByteArray &payload)
