@@ -39,6 +39,10 @@ class PlayAudioRequest(BaseModel):
     audio_filename: str
 
 
+class FlushRequest(BaseModel):
+    conversation_id: int
+
+
 @router.post("/session")
 async def create_session(req: CreateSessionRequest):
     """为 conversation_id 创建数字人会话。"""
@@ -113,6 +117,41 @@ async def play_audio(req: PlayAudioRequest):
     await send_audio_to_livetalking(req.conversation_id, req.audio_filename)
     elapsed = time.monotonic() - t0
     print(f"[play-audio] conv={req.conversation_id} file={req.audio_filename} 总耗时={elapsed:.3f}s")
+    return {"code": 200, "message": "ok"}
+
+
+@router.post("/play-audio-queue")
+async def play_audio_queue(req: PlayAudioRequest):
+    """预推送：将 WAV 暂存到 LiveTalking 的待处理队列，不立即推理。
+
+    前端在预推送时调用此端点而非 /play-audio。
+    LiveTalking 将音频暂存，等前端调用 /flush 后再开始推理。
+    这样当前句播放期间不会产生下一句的视频帧，避免画面卡顿。
+    """
+    import time
+
+    t0 = time.monotonic()
+    from app.services.tts_streaming import send_audio_to_livetalking_queued
+    await send_audio_to_livetalking_queued(req.conversation_id, req.audio_filename)
+    elapsed = time.monotonic() - t0
+    print(f"[play-audio-queue] conv={req.conversation_id} file={req.audio_filename} 总耗时={elapsed:.3f}s")
+    return {"code": 200, "message": "ok"}
+
+
+@router.post("/flush")
+async def flush_audio_queue(req: FlushRequest):
+    """通知 LiveTalking 将待处理队列中的下一句音频推入推理管道。
+
+    前端在 advancePlayback 时调用，每次从队列头部取出一句开始推理。
+    内部不读取 WAV 文件（音频已在 /play-audio-queue 时缓存），只是一个轻量信号。
+    """
+    import time
+
+    t0 = time.monotonic()
+    from app.services.tts_streaming import flush_livetalking_queue
+    await flush_livetalking_queue(req.conversation_id)
+    elapsed = time.monotonic() - t0
+    print(f"[flush] conv={req.conversation_id} 总耗时={elapsed:.3f}s")
     return {"code": 200, "message": "ok"}
 
 

@@ -1,6 +1,12 @@
 from fastapi import APIRouter
 from .endpoints import auth, chat, conversations, digital_human, admin
-from .endpoints.digital_human import play_audio as digital_human_play_audio, PlayAudioRequest
+from .endpoints.digital_human import (
+    play_audio as digital_human_play_audio,
+    play_audio_queue as digital_human_play_audio_queue,
+    flush_audio_queue as digital_human_flush_audio_queue,
+    PlayAudioRequest,
+    FlushRequest,
+)
 
 api_router = APIRouter()
 api_router.include_router(chat.router, tags=["游客交互"])
@@ -13,3 +19,13 @@ api_router.include_router(admin.router, prefix="/admin", tags=["管理员操作"
 @api_router.post("/play-audio")
 async def play_audio_route(req: PlayAudioRequest):
     return await digital_human_play_audio(req)
+
+
+@api_router.post("/play-audio-queue")
+async def play_audio_queue_route(req: PlayAudioRequest):
+    return await digital_human_play_audio_queue(req)
+
+
+@api_router.post("/flush")
+async def flush_audio_queue_route(req: FlushRequest):
+    return await digital_human_flush_audio_queue(req)

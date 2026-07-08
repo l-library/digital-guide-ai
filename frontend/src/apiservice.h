@@ -135,6 +135,8 @@ public:
     // Audio playback
 public slots:
     void playAudio(int conversationId, const QString &audioFilename);
+    void playAudioQueued(int conversationId, const QString &audioFilename);
+    void flushAudio(int conversationId);
 
 signals:
     // Auth

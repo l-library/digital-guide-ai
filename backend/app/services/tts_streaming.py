@@ -23,8 +23,47 @@ os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
 
 
 def split_sentences(text: str) -> list[str]:
-    """按中文句号/感叹号/问号/换行拆分句子，过滤空串"""
-    return [s for s in re.split(r'[。！？\n]+', text) if s.strip()]
+    """按中文标点拆分句子，过滤空串。
+
+    分句策略（最小长度混合分句）：
+    - 句末标点（。！？\n）：总是分句，无论句子长度
+    - 逗分标点（，；）：仅当当前累积片段 > 8 字时才分句
+
+    这样短句（如"您好，欢迎来到祥符禅寺景区"）保持完整，
+    避免 0.3s 的微型音频碎片（LiveTalking 每个文件有 ~0.7s 固定开销）；
+    长句在逗号处拆分为 4-5s 的中等句，TTS 合成更快，
+    更容易在前一句播放期间完成 → 预推送成功率更高。
+    """
+    SENTENCE_END = set("。！？\n")
+    COMMA = set("，；")
+    MIN_LENGTH = 8
+
+    fragments: list[str] = []
+    current = ""
+
+    for ch in text:
+        if ch in SENTENCE_END:
+            current = current.strip()
+            if current:
+                fragments.append(current)
+            current = ""
+        elif ch in COMMA:
+            current += ch
+            # 逗号处分句：仅当当前片段超过最小长度时
+            if len(current) > MIN_LENGTH:
+                current = current.strip()
+                if current:
+                    fragments.append(current)
+                current = ""
+        else:
+            current += ch
+
+    # 处理末尾未闭合的片段
+    current = current.strip()
+    if current:
+        fragments.append(current)
+
+    return fragments
 
 
 def get_wav_duration(filepath: str) -> float:
@@ -64,6 +103,44 @@ async def send_audio_to_livetalking(conversation_id: int, audio_filename: str):
         )
     except Exception as e:
         print(f"[LiveTalking音频推送失败] conversation_id={conversation_id}: {e}")
+
+
+async def send_audio_to_livetalking_queued(conversation_id: int, audio_filename: str):
+    """预推送：将 WAV 暂存到 LiveTalking 待处理队列，不立即推理。
+
+    LiveTalking 会将音频存入内部缓冲区，等 /flush_queue 调用后再开始推理。
+    """
+    sessionid = get_session_id(conversation_id)
+    if sessionid is None:
+        return
+    filepath = os.path.join(TEMP_AUDIO_DIR, audio_filename)
+    if not os.path.exists(filepath):
+        return
+    t0 = time.monotonic()
+    try:
+        with open(filepath, "rb") as f:
+            audio_bytes = f.read()
+        t_read = time.monotonic()
+        await get_dh_client().send_audio_queued(sessionid, audio_bytes)
+        t_push = time.monotonic()
+        print(
+            f"[LiveTalking预推送队列] conv={conversation_id} "
+            f"文件读取={t_read - t0:.3f}s LiveTalking POST={t_push - t_read:.3f}s "
+            f"总耗时={t_push - t0:.3f}s"
+        )
+    except Exception as e:
+        print(f"[LiveTalking预推送队列失败] conversation_id={conversation_id}: {e}")
+
+
+async def flush_livetalking_queue(conversation_id: int):
+    """通知 LiveTalking 将待处理队列中的下一句音频推入推理管道。"""
+    sessionid = get_session_id(conversation_id)
+    if sessionid is None:
+        return
+    try:
+        await get_dh_client().flush_audio_queue(sessionid)
+    except Exception as e:
+        print(f"[flush-livetalking] conv={conversation_id} 失败: {e}")
 
 
 
@@ -177,7 +254,7 @@ async def create_streaming_pipeline(
                 "content": token,
             }
 
-            if sentence_buffer and sentence_buffer[-1] in "。！？\n":
+            if sentence_buffer and sentence_buffer[-1] in "。！？\n，；":
                 sentences = split_sentences(sentence_buffer)
                 for s in sentences:
                     yield {

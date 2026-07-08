@@ -20,11 +20,36 @@ from app.services.tts_streaming import (
 
 
 class TestSplitSentences:
-    """split_sentences — 按中文标点拆分句子。"""
+    """split_sentences — 按中文标点拆分句子（最小长度混合分句）。"""
 
     def test_basic(self):
-        """基本标点拆分：句号、感叹号、问号。"""
+        """句末标点总是分句。"""
         assert split_sentences("你好。欢迎！再见？") == ["你好", "欢迎", "再见"]
+
+    def test_short_comma_not_split(self):
+        """短句中的逗号不分句——保持完整，避免微型音频碎片。"""
+        assert split_sentences("您好，欢迎来到祥符禅寺景区。") == ["您好，欢迎来到祥符禅寺景区"]
+
+    def test_long_comma_split(self):
+        """长句（>15字）中的逗号分句——拆成中等长度句，TTS 更快。"""
+        result = split_sentences("熟悉灵山胜境的一草一木和每处景点背后的故事，还有重达十二点八吨的江南第一钟。")
+        # 第一段 >15 字 → 逗号处分句（保留逗号，CosyVoice 会自然处理间距）；第二段以句号结尾
+        assert len(result) == 2
+        assert result[0] == "熟悉灵山胜境的一草一木和每处景点背后的故事，"
+        assert result[1] == "还有重达十二点八吨的江南第一钟"
+
+    def test_semicolon_split(self):
+        """分号在长句中分句。"""
+        result = split_sentences("这里有很多值得一看的景点和历史遗存；每处都有深厚的文化底蕴。")
+        assert len(result) == 2
+        assert result[0] == "这里有很多值得一看的景点和历史遗存；"
+        assert result[1] == "每处都有深厚的文化底蕴"
+
+    def test_multiple_commas_in_long_sentence(self):
+        """长句有多个逗号时，每段 >15 字才分。"""
+        result = split_sentences("这里背靠灵山主峰面朝太湖三万顷碧波，左右青龙白虎二山环抱，形成了前有照后有靠的风水格局。")
+        # 每段都 >15 字 → 分成 3 段
+        assert len(result) == 3
 
     def test_no_punctuation(self):
         """无标点文本返回整个句子。"""
@@ -331,7 +356,7 @@ class TestSentenceAudioEvents:
                         for i, ae in enumerate(audio_events):
                             assert ae["index"] == i, (
                                 f"Expected index {i}, got {ae['index']}"
-                            )
+                        )
                         print("PASS: sentence_audio count matches sentences")
 
         asyncio.run(run())

@@ -102,6 +102,50 @@ async def humanaudio(request):
         return json_error(str(e))
 
 
+async def humanaudio_queue(request):
+    """上传音频文件但暂不处理（预推送缓冲）。
+
+    将音频存入 session 的待处理队列，不立即开始推理。
+    调用 /flush_queue 后再逐句推入处理管道。
+    """
+    try:
+        form = await request.post()
+        sessionid = str(form.get('sessionid', ''))
+        fileobj = form["file"]
+        filebytes = fileobj.file.read()
+
+        avatar_session = get_session(request, sessionid)
+        if avatar_session is None:
+            return json_error("session not found")
+
+        if not hasattr(avatar_session, '_queued_audio'):
+            avatar_session._queued_audio = []
+        avatar_session._queued_audio.append(filebytes)
+        return json_ok()
+    except Exception as e:
+        logger.exception('humanaudio_queue exception:')
+        return json_error(str(e))
+
+
+async def flush_queue(request):
+    """将待处理队列中的下一句音频推入处理管道。每次调用取一句。"""
+    try:
+        params = await request.json()
+        sessionid = params.get('sessionid', '')
+
+        avatar_session = get_session(request, sessionid)
+        if avatar_session is None:
+            return json_error("session not found")
+
+        if hasattr(avatar_session, '_queued_audio') and avatar_session._queued_audio:
+            filebytes = avatar_session._queued_audio.pop(0)
+            avatar_session.put_audio_file(filebytes, {})
+        return json_ok()
+    except Exception as e:
+        logger.exception('flush_queue exception:')
+        return json_error(str(e))
+
+
 async def set_audiotype(request):
     """设置自定义状态（动作编排）"""
     try:
@@ -214,6 +258,8 @@ def setup_routes(app):
     """注册所有路由到 aiohttp app"""
     app.router.add_post("/human", human)
     app.router.add_post("/humanaudio", humanaudio)
+    app.router.add_post("/humanaudio_queue", humanaudio_queue)
+    app.router.add_post("/flush_queue", flush_queue)
     app.router.add_post("/set_audiotype", set_audiotype)
     app.router.add_post("/record", record)
     app.router.add_post("/interrupt_talk", interrupt_talk)

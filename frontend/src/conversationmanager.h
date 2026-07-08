@@ -117,11 +117,15 @@ private:
     bool m_pendingPlaybackConfirm = false;
 
     // 预推送：当下一句音频入队时，如果当前句已在 LiveTalking 中播放（eventpoint==1 已收到），
-    // 立即推送给 LiveTalking。LiveTalking 的 FIFO 队列保证预推送的音频排在当前句后。
+    // 延迟到当前句剩 ~2s 时再推送给 LiveTalking。延迟推送避免了在整个播放期间
+    // LiveTalking GPU 同时处理两句口型推理导致的视频卡顿（口型网络并发争抢 GPU）。
+    // LiveTalking 的 FIFO 队列保证预推送的音频排在当前句后。
     // 必须等 eventpoint==1 后才预推送，否则当前句的 HTTP 请求可能还没到达 LiveTalking，
     // 导致预推送的音频排到当前句前面（HTTP 竞态乱序）。
+    QTimer m_prePushTimer;
     int m_prePushedIndex = -1;  // 已预推送的句子 index，-1 表示无
     bool m_currentSentencePlaying = false;  // eventpoint==1 已收到，当前句在 LiveTalking 中播放
+    qint64 m_currentPlaybackStartMs = 0;  // 当前句 eventpoint==1 的时间戳（ms），用于计算剩余播放时间
 
     void appendMessage(const QString &role, const QString &content);
     void updateLastAiMessageContent(const QString &token);

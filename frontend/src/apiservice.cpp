@@ -996,3 +996,34 @@ void ApiService::playAudio(int conversationId, const QString &audioFilename)
         reply->deleteLater();
     });
 }
+
+void ApiService::playAudioQueued(int conversationId, const QString &audioFilename)
+{
+    QNetworkRequest request(QUrl(BASE_URL + "/api/v1/play-audio-queue"));
+    request.setTransferTimeout(15000);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject body;
+    body["conversation_id"] = conversationId;
+    body["audio_filename"] = audioFilename;
+
+    QNetworkReply *reply = m_networkManager->post(request, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [reply]() {
+        reply->deleteLater();
+    });
+}
+
+void ApiService::flushAudio(int conversationId)
+{
+    QNetworkRequest request(QUrl(BASE_URL + "/api/v1/flush"));
+    request.setTransferTimeout(15000);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QJsonObject body;
+    body["conversation_id"] = conversationId;
+
+    QNetworkReply *reply = m_networkManager->post(request, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [reply]() {
+        reply->deleteLater();
+    });
+}

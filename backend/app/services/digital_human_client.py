@@ -87,6 +87,36 @@ class DigitalHumanClient:
             raise RuntimeError(f"LiveTalking send_audio 失败: {result.get('msg')}")
         return result
 
+    async def send_audio_queued(self, sessionid: str, audio_bytes: bytes, filename: str = "audio.wav") -> dict:
+        """上传音频到 LiveTalking 的待处理队列（预推送用）。
+
+        LiveTalking 不会立即开始推理，而是暂存音频。
+        前端调用 /flush 后，LiveTalking 再从队列头部取出一句开始推理。
+        这样当前句播放期间不会产生下一句的视频帧，避免画面卡顿。
+        """
+        client = await self._get_client()
+        files = {"file": (filename, audio_bytes, "audio/wav")}
+        data = {"sessionid": sessionid}
+        resp = await client.post("/humanaudio_queue", data=data, files=files)
+        resp.raise_for_status()
+        result = resp.json()
+        if result.get("code") != 0:
+            raise RuntimeError(f"LiveTalking send_audio_queued 失败: {result.get('msg')}")
+        return result
+
+    async def flush_audio_queue(self, sessionid: str) -> dict:
+        """通知 LiveTalking 将待处理队列中的下一句音频推入推理管道。
+
+        每次调用从队列头部取出一句开始推理。
+        """
+        client = await self._get_client()
+        resp = await client.post("/flush_queue", json={"sessionid": sessionid})
+        resp.raise_for_status()
+        result = resp.json()
+        if result.get("code") != 0:
+            raise RuntimeError(f"LiveTalking flush_audio_queue 失败: {result.get('msg')}")
+        return result
+
     async def close(self):
         """关闭 HTTP 客户端"""
         if self._client and not self._client.is_closed:
