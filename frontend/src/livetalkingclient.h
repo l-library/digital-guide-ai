@@ -63,6 +63,10 @@ signals:
     void sessionCreated(const QString &sessionId);
     void conversationIdChanged();
     void errorOccurred(const QString &error);
+    // LiveTalking 上报 eventpoint==1：当前句的口型/语音真正开始播放。
+    // 此时当前句的音频 chunk 已在 LiveTalking 的 FIFO 队列中，
+    // 可以安全预推送下一句（不会乱序）。
+    void speakingStarted();
     // LiveTalking 上报 eventpoint==2：当前句的口型/语音真正播完。
     void speakingFinished();
 

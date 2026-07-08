@@ -60,6 +60,10 @@ public slots:
     // 由 LiveTalking 的 speakingFinished 信号触发，或由 watchdog 兜底推进。
     // 内部用 m_pendingPlaybackConfirm 做去重，避免双推进跳句。
     void advancePlayback();
+    // 由 LiveTalking 的 speakingStarted 信号触发（eventpoint==1）。
+    // 此时当前句的音频 chunk 已在 LiveTalking 的 FIFO 队列中，
+    // 可以安全预推送下一句（不会乱序）。
+    void onCurrentSentenceStarted();
 
 signals:
     void currentConversationChanged();
@@ -106,11 +110,18 @@ private:
     bool m_playbackActive = false;
 
     // 逐句播放的兜底定时器：在 LiveTalking 未回报 speakingFinished 时
-    // 按 duration+3s 主动推进，避免永远卡死。
+    // 按 duration+5s 主动推进，避免永远卡死。
     QTimer m_playbackWatchdog;
     // 当前是否在等待 LiveTalking 回报本句播完；
     // 任何一路（finished / watchdog）先到即推进，后到者被忽略。
     bool m_pendingPlaybackConfirm = false;
+
+    // 预推送：当下一句音频入队时，如果当前句已在 LiveTalking 中播放（eventpoint==1 已收到），
+    // 立即推送给 LiveTalking。LiveTalking 的 FIFO 队列保证预推送的音频排在当前句后。
+    // 必须等 eventpoint==1 后才预推送，否则当前句的 HTTP 请求可能还没到达 LiveTalking，
+    // 导致预推送的音频排到当前句前面（HTTP 竞态乱序）。
+    int m_prePushedIndex = -1;  // 已预推送的句子 index，-1 表示无
+    bool m_currentSentencePlaying = false;  // eventpoint==1 已收到，当前句在 LiveTalking 中播放
 
     void appendMessage(const QString &role, const QString &content);
     void updateLastAiMessageContent(const QString &token);

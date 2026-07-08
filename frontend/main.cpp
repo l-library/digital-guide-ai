@@ -61,5 +61,10 @@ int main(int argc, char *argv[])
     QObject::connect(&liveTalkingClient, &LiveTalkingClient::speakingFinished,
                      &conversationManager, &ConversationManager::advancePlayback);
 
+    // eventpoint==1：当前句开始在 LiveTalking 中播放，此时当前句的音频 chunk
+    // 已在 FIFO 队列中，可以安全预推送下一句（避免 HTTP 竞态导致乱序）。
+    QObject::connect(&liveTalkingClient, &LiveTalkingClient::speakingStarted,
+                     &conversationManager, &ConversationManager::onCurrentSentenceStarted);
+
     return QCoreApplication::exec();
 }

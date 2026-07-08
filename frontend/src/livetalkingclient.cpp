@@ -333,15 +333,20 @@ void LiveTalkingClient::processAudioFrame(const QByteArray &payload)
     if (eventpointCode == 1) {
         if (!m_speaking) {
             m_speaking = true;
+            qDebug() << "[间隔测算] eventpoint==1（句子开始）"
+                     << QDateTime::currentMSecsSinceEpoch() << "ms";
             // 清空旧句的视频缓冲，但保留 m_currentFrame 不动——
             // 过渡期间 QML 继续显示上一句最后一帧，新句视频帧到达后
             // 在下一个显示周期（≤40ms）内接上，音画不同步极小。
             m_videoFrameBuffer.clear();
             emit speakingChanged();
+            emit speakingStarted();
         }
     } else if (eventpointCode == 2) {
         if (m_speaking) {
             m_speaking = false;
+            qDebug() << "[间隔测算] eventpoint==2（句子结束）"
+                     << QDateTime::currentMSecsSinceEpoch() << "ms";
             emit speakingChanged();
             // 当前句播完，通知 ConversationManager 推进下一句
             emit speakingFinished();

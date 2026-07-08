@@ -148,7 +148,8 @@ ConversationManager::ConversationManager(QObject *parent)
     connect(&api, &ApiService::sentenceAudioReceived,
             this, &ConversationManager::enqueueSentenceAudio);
 
-    // 兜底定时器：若 LiveTalking 未在 duration+3s 内回报本句播完，主动推进
+    // 兜底定时器：若 LiveTalking 未在 duration+5s 内回报本句播完，主动推进
+    // 用 5s 而非 3s 余量，避免长句场景下看门狗与 eventpoint==2 竞争
     m_playbackWatchdog.setSingleShot(true);
     connect(&m_playbackWatchdog, &QTimer::timeout,
             this, &ConversationManager::advancePlayback);
@@ -466,6 +467,18 @@ void ConversationManager::enqueueSentenceAudio(int conversationId, int index,
     // 有待播放的句子且当前未在播放 → 立即启动
     if (m_currentAudioIndex < m_audioQueue.size() && !m_playbackActive) {
         playNextSentence();
+    } else if (m_playbackActive && m_pendingPlaybackConfirm && m_currentSentencePlaying
+               && m_currentAudioIndex < m_audioQueue.size()
+               && m_prePushedIndex != m_currentAudioIndex) {
+        // 当前句已在 LiveTalking 中播放（eventpoint==1 已收到），
+        // 下一句刚入队 → 立即预推送。此时当前句的 chunk 已在 FIFO 队列中，
+        // 预推送的 chunk 一定排在后面，不会乱序。
+        const SentenceAudioItem &nextItem = m_audioQueue.at(m_currentAudioIndex);
+        qDebug() << "[预推送] 句" << nextItem.index << "已入队，立即预推送"
+                 << "audio=" << nextItem.audioFilename
+                 << "time=" << QDateTime::currentMSecsSinceEpoch() << "ms";
+        ApiService::instance().playAudio(m_activeConversationId, nextItem.audioFilename);
+        m_prePushedIndex = m_currentAudioIndex;
     }
 }
 
@@ -486,22 +499,27 @@ void ConversationManager::playNextSentence()
 
     // 用拷贝避免后续队列变动导致引用失效
     const SentenceAudioItem item = m_audioQueue.at(m_currentAudioIndex);
+    qDebug() << "[间隔测算] playNextSentence 调用 playAudio"
+             << "index=" << item.index
+             << "time=" << QDateTime::currentMSecsSinceEpoch() << "ms";
     qDebug() << "SentenceAudioQueue: playing index=" << item.index
              << "audio=" << item.audioFilename;
 
-    ApiService::instance().playAudio(m_activeConversationId, item.audioFilename);
+    // 如果本句已被预推送，不再重复发送（LiveTalking 队列中已有）
+    if (m_prePushedIndex != item.index) {
+        ApiService::instance().playAudio(m_activeConversationId, item.audioFilename);
+    } else {
+        qDebug() << "[预推送] 句" << item.index << "已预推送，跳过重复发送";
+    }
 
     m_currentAudioIndex++;
     // 标记「等待本句播完」，由 LiveTalking 的 speakingFinished 或 watchdog 推进
     m_pendingPlaybackConfirm = true;
 
-    // 兜底超时：duration 基础上加 3 秒余量，覆盖前向 HTTP 链路与起播抖动
-    const int watchdogMs = static_cast<int>((item.duration + 3.0) * 1000);
+    // 兜底超时：duration + 5s 余量，覆盖 LiveTalking 处理延迟 + 起播抖动
+    // 用 5s 而非 3s，避免长句场景下看门狗与 eventpoint==2 同时触发导致跳句
+    const int watchdogMs = static_cast<int>((item.duration + 5.0) * 1000);
     m_playbackWatchdog.start(watchdogMs);
-
-    // 不预缓冲下一句：同时向 LiveTalking 提交两段音频会触发口型网络
-    // 并发推理，抢占本句的 GPU/CPU 算力，导致本句视频帧到达抖动 → 画面卡顿。
-    // 严格依赖 speakingFinished(eventpoint==2) → advancePlayback() 串行推进。
 }
 
 void ConversationManager::advancePlayback()
@@ -511,8 +529,29 @@ void ConversationManager::advancePlayback()
         return;
     }
     m_pendingPlaybackConfirm = false;
+    m_currentSentencePlaying = false;
     m_playbackWatchdog.stop();
+    qDebug() << "[间隔测算] advancePlayback 触发（speakingFinished/watchdog）"
+             << "time=" << QDateTime::currentMSecsSinceEpoch() << "ms";
     playNextSentence();
+}
+
+void ConversationManager::onCurrentSentenceStarted()
+{
+    // eventpoint==1 收到：当前句的音频 chunk 已在 LiveTalking 的 FIFO 队列中
+    m_currentSentencePlaying = true;
+
+    // 如果下一句已在队列中且尚未预推送，立即预推送
+    if (m_playbackActive && m_pendingPlaybackConfirm
+        && m_currentAudioIndex < m_audioQueue.size()
+        && m_prePushedIndex != m_currentAudioIndex) {
+        const SentenceAudioItem &nextItem = m_audioQueue.at(m_currentAudioIndex);
+        qDebug() << "[预推送] eventpoint==1 触发预推送句" << nextItem.index
+                 << "audio=" << nextItem.audioFilename
+                 << "time=" << QDateTime::currentMSecsSinceEpoch() << "ms";
+        ApiService::instance().playAudio(m_activeConversationId, nextItem.audioFilename);
+        m_prePushedIndex = m_currentAudioIndex;
+    }
 }
 
 void ConversationManager::clearAudioQueue()
@@ -521,6 +560,8 @@ void ConversationManager::clearAudioQueue()
     m_currentAudioIndex = 0;
     m_activeConversationId = 0;
     m_pendingPlaybackConfirm = false;
+    m_prePushedIndex = -1;
+    m_currentSentencePlaying = false;
     m_playbackWatchdog.stop();
     if (m_playbackActive) {
         m_playbackActive = false;
