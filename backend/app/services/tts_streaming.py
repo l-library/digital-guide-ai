@@ -36,7 +36,7 @@ def split_sentences(text: str) -> list[str]:
     """
     SENTENCE_END = set("。！？\n")
     COMMA = set("，；")
-    MIN_LENGTH = 8
+    MIN_LENGTH = 15
 
     fragments: list[str] = []
     current = ""
