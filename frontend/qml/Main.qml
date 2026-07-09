@@ -60,6 +60,10 @@ ApplicationWindow {
                     settingsManager.loadSettings(loginManager.currentUser.id)
                     stackView.push(settingsPage)
                 }
+                onNavigateToAdmin: {
+                    adminManager.loadUsers(1, 20, "")
+                    stackView.push(adminPage)
+                }
             }
         }
 
@@ -82,6 +86,13 @@ ApplicationWindow {
                     loginManager.logout()
                     stackView.replace(loginPage)
                 }
+            }
+        }
+
+        Component {
+            id: adminPage
+            AdminPage {
+                onNavigateBack: stackView.pop()
             }
         }
     }

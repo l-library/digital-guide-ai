@@ -222,6 +222,8 @@ void ApiService::checkAutoLogin(const QString &token, int userId)
         emit autoLoginResult(false, QVariantMap());
         return;
     }
+    // 保存 token 到成员变量，供后续需要认证的请求使用
+    m_authToken = token;
     QUrl url(BASE_URL + "/api/v1/auth/verify");
     QNetworkRequest req(url);
     req.setTransferTimeout(15000);
@@ -258,6 +260,8 @@ void ApiService::validateToken(const QString &token, int userId)
         emit autoLoginResult(false, QVariantMap());
         return;
     }
+    // 保存 token 到成员变量，供后续需要认证的请求使用
+    m_authToken = token;
     QUrl url(BASE_URL + "/api/v1/auth/verify");
     QNetworkRequest req(url);
     req.setTransferTimeout(15000);
@@ -814,6 +818,9 @@ void ApiService::deleteKnowledgeDoc(int docId)
 {
     QNetworkRequest req(QUrl(BASE_URL + "/api/v1/admin/knowledge-docs/" + QString::number(docId)));
     req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
     QNetworkReply *reply = m_networkManager->deleteResource(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
@@ -829,6 +836,9 @@ void ApiService::loadKnowledgeDocs(int)
 {
     QNetworkRequest req(QUrl(BASE_URL + "/api/v1/admin/knowledge-docs"));
     req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
     QNetworkReply *reply = m_networkManager->get(req);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
@@ -978,6 +988,232 @@ void ApiService::exportConversation(int conversationId)
 {
     QTimer::singleShot(0, this, [this, conversationId]() {
         emit conversationExported(conversationId, QVariantMap());
+    });
+}
+
+// ==================== Admin user management ====================
+
+/** 加载用户列表：GET /api/v1/admin/users?page=&page_size=&search=
+ *  解析返回的分页数据，组装成 QVariantMap 列表后发射 usersLoaded 信号 */
+void ApiService::loadUsers(int page, int pageSize, const QString &search)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/users");
+    QUrlQuery query;
+    query.addQueryItem("page", QString::number(page));
+    query.addQueryItem("page_size", QString::number(pageSize));
+    if (!search.isEmpty()) {
+        query.addQueryItem("search", search);
+    }
+    url.setQuery(query);
+
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, page, pageSize]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "loadUsers error:" << reply->errorString();
+            emit adminError("加载用户列表失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        int code = resp["code"].toInt();
+        if (code == 200) {
+            QJsonObject data = resp["data"].toObject();
+            QJsonArray items = data["items"].toArray();
+            int total = data["total"].toInt();
+
+            QVariantList users;
+            for (const QJsonValue &val : items) {
+                QJsonObject obj = val.toObject();
+                QVariantMap user;
+                user["id"] = obj["id"].toInt();
+                user["username"] = obj["username"].toString();
+                user["displayName"] = obj["display_name"].toString();
+                user["role"] = obj["role"].toString();
+                user["phone"] = obj["phone"].toString();
+                user["email"] = obj["email"].toString();
+                user["isActive"] = obj["is_active"].toBool();
+                user["avatarUrl"] = obj["avatar_url"].toString();
+                user["createdAt"] = obj["created_at"].toString();
+                users.append(user);
+            }
+            emit usersLoaded(users, total, page, pageSize);
+        } else {
+            emit adminError(resp["message"].toString());
+        }
+    });
+}
+
+/** 创建新用户：POST /api/v1/admin/users
+ *  请求体包含 username、password、display_name，成功后发射 userCreated 信号 */
+void ApiService::createUser(const QString &username, const QString &password, const QString &displayName)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/users");
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+
+    QJsonObject body;
+    body["username"] = username;
+    body["password"] = password;
+    body["display_name"] = displayName;
+
+    QNetworkReply *reply = m_networkManager->post(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        // 无论 HTTP 状态码如何，都读取响应体以提取错误详情
+        QByteArray responseData = reply->readAll();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "createUser error:" << reply->errorString();
+            // 尝试从 422 响应中提取验证错误详情
+            QJsonObject resp = QJsonDocument::fromJson(responseData).object();
+            if (resp.contains("detail") && resp["detail"].isArray()) {
+                QJsonArray details = resp["detail"].toArray();
+                if (!details.isEmpty()) {
+                    QJsonObject firstError = details[0].toObject();
+                    QString msg = firstError["msg"].toString();
+                    if (!msg.isEmpty()) {
+                        emit adminError("创建用户失败: " + msg);
+                        return;
+                    }
+                }
+            }
+            emit adminError("创建用户失败: " + reply->errorString());
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(responseData).object();
+        int code = resp["code"].toInt();
+        if (code == 200) {
+            QJsonObject data = resp["data"].toObject();
+            QVariantMap userData;
+            userData["id"] = data["id"].toInt();
+            userData["username"] = data["username"].toString();
+            userData["displayName"] = data["display_name"].toString();
+            userData["role"] = data["role"].toString();
+            userData["isActive"] = data["is_active"].toBool();
+            userData["createdAt"] = data["created_at"].toString();
+            emit userCreated(data["id"].toInt(), userData);
+        } else {
+            emit adminError(resp["message"].toString());
+        }
+    });
+}
+
+/** 更新用户信息：PUT /api/v1/admin/users/:id
+ *  仅更新 fields 中提供的字段（displayName/email/phone），部分更新 */
+void ApiService::updateUser(int userId, const QVariantMap &fields)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/users/" + QString::number(userId));
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+
+    QJsonObject body;
+    if (fields.contains("displayName")) {
+        body["display_name"] = fields["displayName"].toString();
+    }
+    if (fields.contains("email")) {
+        body["email"] = fields["email"].toString();
+    }
+    if (fields.contains("phone")) {
+        body["phone"] = fields["phone"].toString();
+    }
+
+    QNetworkReply *reply = m_networkManager->put(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply, userId]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "updateUser error:" << reply->errorString();
+            emit adminError("更新用户信息失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        int code = resp["code"].toInt();
+        if (code == 200) {
+            QJsonObject data = resp["data"].toObject();
+            QVariantMap userData;
+            userData["id"] = data["id"].toInt();
+            userData["displayName"] = data["display_name"].toString();
+            userData["email"] = data["email"].toString();
+            userData["phone"] = data["phone"].toString();
+            userData["isActive"] = data["is_active"].toBool();
+            emit userUpdated(userId, userData);
+        } else {
+            emit adminError(resp["message"].toString());
+        }
+    });
+}
+
+/** 删除用户：DELETE /api/v1/admin/users/:id
+ *  级联删除用户的对话和关联数据，成功后发射 userDeleted 信号 */
+void ApiService::deleteUser(int userId)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/users/" + QString::number(userId));
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+
+    QNetworkReply *reply = m_networkManager->deleteResource(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, userId]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "deleteUser error:" << reply->errorString();
+            emit adminError("删除用户失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        int code = resp["code"].toInt();
+        if (code == 200) {
+            emit userDeleted(userId);
+        } else {
+            emit adminError(resp["message"].toString());
+        }
+    });
+}
+
+/** 切换用户启用/禁用状态：PUT /api/v1/admin/users/:id/status
+ *  请求体包含 is_active，成功后发射 userStatusChanged 信号 */
+void ApiService::toggleUserStatus(int userId, bool isActive)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/users/" + QString::number(userId) + "/status");
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+
+    QJsonObject body;
+    body["is_active"] = isActive;
+
+    QNetworkReply *reply = m_networkManager->put(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply, userId, isActive]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            qDebug() << "toggleUserStatus error:" << reply->errorString();
+            emit adminError("修改用户状态失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        int code = resp["code"].toInt();
+        if (code == 200) {
+            emit userStatusChanged(userId, isActive);
+        } else {
+            emit adminError(resp["message"].toString());
+        }
     });
 }
 

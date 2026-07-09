@@ -8,6 +8,7 @@ Page {
     id: root
     signal navigateToHistory()
     signal navigateToSettings()
+    signal navigateToAdmin()
 
     property string inputMode: "text"
     property string outputMode: "digitHuman"
@@ -378,6 +379,41 @@ Page {
                 onClicked: {
                     drawer.close()
                     root.navigateToSettings()
+                }
+            }
+
+            ItemDelegate {
+                Layout.fillWidth: true
+                height: 56
+                visible: loginManager.currentUser && loginManager.currentUser.role === "admin"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 24
+                    spacing: 16
+
+                    Rectangle {
+                        width: 28
+                        height: 28
+                        color: "transparent"
+                        Image {
+                            source: "qrc:/asset/setting.png"
+                            width: 28; height: 28
+                            smooth: true
+                            fillMode: Image.PreserveAspectFit
+                        }
+                    }
+
+                    Label {
+                        text: qsTr("用户管理")
+                        font.pixelSize: 16
+                        Layout.fillWidth: true
+                    }
+                }
+
+                onClicked: {
+                    drawer.close()
+                    root.navigateToAdmin()
                 }
             }
 

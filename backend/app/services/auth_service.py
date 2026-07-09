@@ -104,7 +104,32 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # 检查账号是否被禁用
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账号已被禁用",
+        )
+
+    # 校验 token 版本号，防止旧 token 在 token 刷新后继续使用
+    token_version = payload.get("token_version", 0)
+    if user.token_version != token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="登录凭证已失效，请重新登录",
+        )
+
     return user
+
+
+async def require_admin(current_user: User = Depends(get_current_user)) -> User:
+    """管理员权限依赖：先获取当前用户，再校验是否为 admin 角色"""
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要管理员权限",
+        )
+    return current_user
 
 
 # 种子管理员初始化

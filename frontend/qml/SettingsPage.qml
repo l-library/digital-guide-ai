@@ -478,6 +478,7 @@ Page {
 
                     ItemDelegate {
                         Layout.fillWidth: true
+                        visible: loginManager.currentUser && loginManager.currentUser.role === "admin"
                         text: qsTr("数据大屏")
                         icon.source: "qrc:/asset/data.png"
                         font.pixelSize: 14

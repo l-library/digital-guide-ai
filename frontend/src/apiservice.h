@@ -132,6 +132,18 @@ public:
     // Export
     void exportConversation(int conversationId);
 
+    // Admin user management
+    /** 加载用户列表（分页+搜索）：GET /api/v1/admin/users */
+    void loadUsers(int page, int pageSize, const QString &search);
+    /** 创建新用户：POST /api/v1/admin/users */
+    void createUser(const QString &username, const QString &password, const QString &displayName);
+    /** 更新用户信息（部分更新）：PUT /api/v1/admin/users/:id */
+    void updateUser(int userId, const QVariantMap &fields);
+    /** 删除用户（级联删除）：DELETE /api/v1/admin/users/:id */
+    void deleteUser(int userId);
+    /** 切换用户启用/禁用状态：PUT /api/v1/admin/users/:id/status */
+    void toggleUserStatus(int userId, bool isActive);
+
     // Audio playback
 public slots:
     void playAudio(int conversationId, const QString &audioFilename);
@@ -191,6 +203,14 @@ signals:
     // Sentence audio
     void sentenceAudioReceived(int conversationId, int index, const QString &text,
                                 const QString &audioFilename, double duration);
+
+    // Admin user management
+    void usersLoaded(QVariantList users, int total, int page, int pageSize);
+    void userCreated(int userId, const QVariantMap &userData);
+    void userUpdated(int userId, const QVariantMap &userData);
+    void userDeleted(int userId);
+    void userStatusChanged(int userId, bool isActive);
+    void adminError(const QString &error);
 
     // Error
     void apiError(const QString &error);

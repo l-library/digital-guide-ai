@@ -1,25 +1,65 @@
+import os
+from typing import Optional
+
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
-    UploadFile,
     File,
     Form,
-    BackgroundTasks,
     HTTPException,
+    Query,
+    UploadFile,
 )
+from langchain_chroma import Chroma
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import KnowledgeDoc
 
+from app.database import get_db
+from app.models import KnowledgeDoc, User
+from app.services.admin_service import (
+    create_user,
+    delete_user_cascade,
+    get_user_detail,
+    list_users,
+    toggle_user_status,
+    update_user,
+)
+from app.services.auth_service import require_admin
 from app.services.knowledge_service import (
-    save_uploaded_file,
-    process_document,
-    _get_embeddings,
     VECTOR_STORE_DIR,
+    _get_embeddings,
+    process_document,
+    save_uploaded_file,
 )
 
 router = APIRouter()
 
+
+# ── Pydantic 请求模型 ────────────────────────────────────────────────
+
+class CreateUserRequest(BaseModel):
+    """创建用户请求体"""
+    username: str = Field(min_length=3, max_length=32)
+    password: str = Field(min_length=6, max_length=64)
+    display_name: str = Field(min_length=1, max_length=50)
+
+
+class UpdateUserRequest(BaseModel):
+    """编辑用户请求体（部分更新，仅更新传入的非 None 字段）"""
+    display_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    avatar_url: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ToggleStatusRequest(BaseModel):
+    """启用/禁用请求体：不传则翻转，传入则明确设置"""
+    is_active: Optional[bool] = None
+
+
+# ── 知识文档管理端点（需要管理员权限）──────────────────────────────────
 
 @router.post("/knowledge-docs")
 async def upload_knowledge_doc(
@@ -28,6 +68,7 @@ async def upload_knowledge_doc(
     user_id: int = Form(...),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     """5.1 上传知识文档接口"""
     try:
@@ -42,7 +83,10 @@ async def upload_knowledge_doc(
 
 @router.get("/knowledge-docs")
 def get_knowledge_docs(
-    page: int = 1, page_size: int = 20, db: Session = Depends(get_db)
+    page: int = 1,
+    page_size: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     """5.2 获取知识文档列表接口"""
     skip = (page - 1) * page_size
@@ -65,7 +109,10 @@ def get_knowledge_docs(
 
 @router.post("/knowledge-docs/{doc_id}/process")
 async def trigger_process_doc(
-    doc_id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)
+    doc_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     """5.6 触发文档向量化接口（异步非阻塞）"""
     doc = db.query(KnowledgeDoc).filter(KnowledgeDoc.id == doc_id).first()
@@ -89,13 +136,12 @@ async def trigger_process_doc(
     return {"doc_id": doc.id, "status": "processing"}
 
 
-import os
-from langchain_chroma import Chroma
-from app.services.knowledge_service import VECTOR_STORE_DIR, _get_embeddings
-
-
 @router.delete("/knowledge-docs/{doc_id}")
-def delete_knowledge_doc(doc_id: int, db: Session = Depends(get_db)):
+def delete_knowledge_doc(
+    doc_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
     """5.5 删除知识文档接口"""
     # 1. 查出文档记录
     doc = db.query(KnowledgeDoc).filter(KnowledgeDoc.id == doc_id).first()
@@ -141,3 +187,120 @@ def delete_knowledge_doc(doc_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "success"}
+
+
+# ── 用户管理端点（需要管理员权限）────────────────────────────────────
+
+@router.get("/users")
+def admin_list_users(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    search: str = Query(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """获取用户列表（分页 + 搜索）"""
+    result = list_users(db, page=page, page_size=page_size, search=search)
+    return {"code": 200, "message": "success", "data": result}
+
+
+@router.post("/users", status_code=201)
+def admin_create_user(
+    req: CreateUserRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """创建新用户（角色为 visitor，默认激活）"""
+    try:
+        user = create_user(db, req.username, req.password, req.display_name)
+        return {"code": 200, "message": "创建成功", "data": user.to_dict()}
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.get("/users/{user_id}")
+def admin_get_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """获取用户详情（含对话数量统计）"""
+    detail = get_user_detail(db, user_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {"code": 200, "message": "success", "data": detail}
+
+
+@router.put("/users/{user_id}")
+def admin_update_user(
+    user_id: int,
+    req: UpdateUserRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """部分更新用户信息"""
+    try:
+        user = update_user(
+            db,
+            user_id,
+            display_name=req.display_name,
+            phone=req.phone,
+            email=req.email,
+            avatar_url=req.avatar_url,
+            is_active=req.is_active,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return {"code": 200, "message": "更新成功", "data": user.to_dict()}
+
+
+@router.delete("/users/{user_id}")
+def admin_delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """删除用户（级联删除对话、消息，清理向量）"""
+    try:
+        deleted = delete_user_cascade(db, user_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        return {"code": 200, "message": "删除成功", "data": {}}
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
+@router.put("/users/{user_id}/status")
+def admin_toggle_user_status(
+    user_id: int,
+    req: ToggleStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """启用/禁用用户：不传 is_active 则翻转，传入则明确设置"""
+    try:
+        if req.is_active is not None:
+            # 明确设置状态
+            user = update_user(db, user_id, is_active=req.is_active)
+            if user is None:
+                raise HTTPException(status_code=404, detail="用户不存在")
+            return {
+                "code": 200,
+                "message": "状态已更新",
+                "data": {"user_id": user.id, "is_active": user.is_active},
+            }
+        else:
+            # 翻转状态
+            new_status = toggle_user_status(db, user_id)
+            if new_status is None:
+                raise HTTPException(status_code=404, detail="用户不存在")
+            return {
+                "code": 200,
+                "message": "状态已翻转",
+                "data": {"user_id": user_id, "is_active": new_status},
+            }
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))

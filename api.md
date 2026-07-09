@@ -1241,6 +1241,223 @@ PUT /settings
 
 ---
 
+## 十、用户管理（管理员）
+
+> 所有端点需要 JWT Bearer Token 认证，且当前用户需具备管理员角色（role=admin）。
+
+### 10.1 用户列表（分页+搜索）
+
+```
+GET /admin/users?page=1&page_size=20&search=张三
+```
+
+**Query 参数:**
+
+| 参数        | 类型   | 默认值 | 说明                 |
+| ----------- | ------ | ------ | -------------------- |
+| `page`      | int    | 1      | 页码                 |
+| `page_size` | int    | 20     | 每页条数（最大 100） |
+| `search`    | string | 无     | 按用户名/昵称模糊搜索 |
+
+**Response `data`:**
+
+```json
+{
+  "items": [
+    {
+      "id": 2,
+      "username": "visitor1",
+      "display_name": "游客小王",
+      "role": "visitor",
+      "phone": "13800138000",
+      "email": "a@example.com",
+      "is_active": true,
+      "avatar_url": null,
+      "created_at": "2026-04-28T10:00:00Z"
+    }
+  ],
+  "total": 100,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+### 10.2 创建用户
+
+```
+POST /admin/users
+```
+
+**Request Body:**
+
+```json
+{
+  "username": "visitor2",
+  "password": "abc123",
+  "display_name": "游客小李"
+}
+```
+
+| 字段           | 类型   | 必填 | 说明                        |
+| -------------- | ------ | ---- | --------------------------- |
+| `username`     | string | 是   | 用户名（3-32位，字母数字下划线） |
+| `password`     | string | 是   | 密码（6-64位）              |
+| `display_name` | string | 是   | 昵称                        |
+
+**Response `data`:**
+
+```json
+{
+  "id": 3,
+  "username": "visitor2",
+  "display_name": "游客小李",
+  "role": "visitor",
+  "is_active": true,
+  "created_at": "2026-04-28T10:00:00Z"
+}
+```
+
+**错误码:**
+
+| code | 说明                       |
+| ---- | -------------------------- |
+| 409  | 用户名已存在               |
+
+### 10.3 用户详情
+
+```
+GET /admin/users/{user_id}
+```
+
+**Response `data`:**
+
+```json
+{
+  "id": 2,
+  "username": "visitor1",
+  "display_name": "游客小王",
+  "role": "visitor",
+  "phone": "13800138000",
+  "email": "a@example.com",
+  "is_active": true,
+  "avatar_url": null,
+  "created_at": "2026-04-28T10:00:00Z",
+  "conversation_count": 15
+}
+```
+
+| 字段                 | 类型         | 说明                               |
+| -------------------- | ------------ | ---------------------------------- |
+| `conversation_count` | int          | 用户创建的对话总数                 |
+
+**错误码:**
+
+| code | 说明           |
+| ---- | -------------- |
+| 404  | 用户不存在     |
+
+### 10.4 编辑用户
+
+```
+PUT /admin/users/{user_id}
+```
+
+**Request Body:**
+
+```json
+{
+  "display_name": "游客小王（已改名）",
+  "phone": "13900139000",
+  "email": "new@example.com",
+  "avatar_url": "https://cdn.example.com/avatars/u2.png",
+  "is_active": true
+}
+```
+
+> 所有字段均为可选，未传字段保持原值不变。
+
+**Response `data`:**
+
+```json
+{
+  "id": 2,
+  "username": "visitor1",
+  "display_name": "游客小王（已改名）",
+  "role": "visitor",
+  "phone": "13900139000",
+  "email": "new@example.com",
+  "is_active": true,
+  "avatar_url": "https://cdn.example.com/avatars/u2.png",
+  "created_at": "2026-04-28T10:00:00Z"
+}
+```
+
+**错误码:**
+
+| code | 说明                         |
+| ---- | ---------------------------- |
+| 404  | 用户不存在                   |
+| 403  | 不能修改超级管理员状态       |
+
+### 10.5 删除用户（级联）
+
+```
+DELETE /admin/users/{user_id}
+```
+
+> 级联删除用户的所有对话、消息和向量数据。
+
+**Response `data`:**
+
+```json
+{}
+```
+
+**错误码:**
+
+| code | 说明                       |
+| ---- | -------------------------- |
+| 404  | 用户不存在                 |
+| 403  | 不能删除超级管理员         |
+
+### 10.6 启用/禁用用户
+
+```
+PUT /admin/users/{user_id}/status
+```
+
+**Request Body:**
+
+```json
+{
+  "is_active": false
+}
+```
+
+> `is_active` 不传则翻转当前状态。禁用用户后，其已签发的 Token 立即失效。
+
+**Response `data`:**
+
+```json
+{
+  "user_id": 2,
+  "is_active": false
+}
+```
+
+**错误码:**
+
+| code | 说明                       |
+| ---- | -------------------------- |
+| 404  | 用户不存在                 |
+| 403  | 不能禁用超级管理员         |
+
+> **注意事项:**
+> - 超级管理员（id=1）不能被删除或禁用
+> - 管理员不能通过用户管理接口修改其他管理员的角色
+
+---
+
 ## 附录：WebSocket 通信流程
 
 ```

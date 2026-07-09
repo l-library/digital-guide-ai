@@ -2,7 +2,7 @@
 数据库模型：对话（Conversation）和消息（Message）
 """
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON, func
+from sqlalchemy import Boolean, Column, Integer, String, Text, DateTime, ForeignKey, JSON, func
 from app.database import Base
 
 
@@ -101,6 +101,8 @@ class User(Base):
     password_hash = Column(String(128), nullable=False)
     display_name = Column(String(50), nullable=False)
     role = Column(String(16), nullable=False, default="visitor")
+    is_active = Column(Boolean, default=True)
+    token_version = Column(Integer, default=0)
     phone = Column(String(20), nullable=True)
     email = Column(String(128), nullable=True)
     avatar_url = Column(String(512), nullable=True)
@@ -115,6 +117,7 @@ class User(Base):
             "role": self.role,
             "phone": self.phone,
             "email": self.email,
+            "is_active": self.is_active,
             "avatar_url": self.avatar_url,
             "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
         }

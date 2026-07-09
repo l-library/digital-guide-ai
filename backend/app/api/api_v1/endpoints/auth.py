@@ -30,7 +30,7 @@ class LoginRequest(BaseModel):
 
 
 def _make_token_data(user: User) -> dict:
-    token = create_access_token({"sub": str(user.id), "role": user.role})
+    token = create_access_token({"sub": str(user.id), "role": user.role, "token_version": user.token_version})
     expires_at = (datetime.utcnow() + timedelta(days=7)).isoformat() + "Z"
     return {"token": token, "expires_at": expires_at}
 
@@ -96,6 +96,12 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户名或密码错误",
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账号已被禁用",
         )
 
     token_data = _make_token_data(user)

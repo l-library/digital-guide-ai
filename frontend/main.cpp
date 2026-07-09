@@ -11,6 +11,7 @@
 #include "src/settingsmanager.h"
 #include "src/voiceinterface.h"
 #include "src/digitalhumanmanager.h"
+#include "src/adminmanager.h"
 #include "src/audioplayer.h"
 #include "src/livetalkingclient.h"
 
@@ -27,6 +28,7 @@ int main(int argc, char *argv[])
     SettingsManager settingsManager;
     VoiceInterface voiceInterface;
     DigitalHumanManager digitalHumanManager;
+    AdminManager adminManager;
     AudioPlayer audioPlayer;
     LiveTalkingClient liveTalkingClient;
 
@@ -37,6 +39,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("settingsManager", &settingsManager);
     engine.rootContext()->setContextProperty("voiceInterface", &voiceInterface);
     engine.rootContext()->setContextProperty("digitalHumanManager", &digitalHumanManager);
+    engine.rootContext()->setContextProperty("adminManager", &adminManager);
     engine.rootContext()->setContextProperty("audioPlayer", &audioPlayer);
     engine.rootContext()->setContextProperty("liveTalkingClient", &liveTalkingClient);
     engine.rootContext()->setContextProperty("apiService", &ApiService::instance());
