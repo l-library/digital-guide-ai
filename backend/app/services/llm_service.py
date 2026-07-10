@@ -74,22 +74,13 @@ async def generate_title_async(user_content: str, assistant_content: str) -> str
     client = _get_client()  # 同步客户端（generate() 已验证可用）
 
     def _call():
+        from app.config.prompt_loader import get_title_system_prompt, get_title_user_prompt
+
         return client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "你是一个对话标题生成器。根据用户的消息和AI的回复，生成一个简洁的对话标题。"
-                        "要求：不超过10个字，只输出标题本身，不要加引号或其他格式。"
-                        "考虑到AI的身份是一名数字人导游，请不要被其回复中一定会有的导游口吻误导，用户的输入应当被更加重视。"
-                        "例如，如果用户让AI做自我介绍，而AI回复自己是某某景点的导游，此时你的输出不应当是\'某某景点AI导游\'之类的，而应该是\'AI导游的自我介绍\'这个更重视用户问题的标题。"
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": f"用户消息：{user_content[:200]}\nAI回复：{assistant_content[:200]}\n\n请生成对话标题：",
-                },
+                {"role": "system", "content": get_title_system_prompt()},
+                {"role": "user", "content": get_title_user_prompt(user_content, assistant_content)},
             ],
             temperature=0.3,
             max_tokens=50,

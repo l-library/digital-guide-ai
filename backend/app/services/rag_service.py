@@ -131,26 +131,10 @@ def retrieve_context(query: str, k: int = 3) -> list[str]:
 def build_prompt(query: str, context_list: list[str]) -> str:
     """
     把检索到的上下文和用户问题拼成完整prompt。
-    llm_service.py 里直接调用这个函数拿到prompt再送给LLM。
+    提示词从 config/prompts.yaml 加载。
     """
+    from app.config.prompt_loader import get_rag_guide_prompt
+
     context_text = "\n\n---\n\n".join(context_list)
-
-    prompt = f"""你是某个景区的AI导游，请根据以下景区资料回答游客的问题。
-要求：
-- 回答简洁，挑重点说，尽量控制在150字内
-- 语气自然亲切，像真人导游
-- 不要使用emoji或动作描写
-- 如果资料中没有相关信息，请如实告知，不要编造
-- 请用2-3句话简要回答，不超过150字
-
-
-【景区资料】
-{context_text}
-
-【游客问题】
-{query}
-
-【回答】"""
-
-    return prompt
+    return get_rag_guide_prompt(context_text=context_text, query=query)
 

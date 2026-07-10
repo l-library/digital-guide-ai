@@ -14,6 +14,8 @@
 #include "src/adminmanager.h"
 #include "src/audioplayer.h"
 #include "src/livetalkingclient.h"
+#include "src/dashboardmanager.h"
+#include "src/reportmanager.h"
 
 int main(int argc, char *argv[])
 {
@@ -31,6 +33,8 @@ int main(int argc, char *argv[])
     AdminManager adminManager;
     AudioPlayer audioPlayer;
     LiveTalkingClient liveTalkingClient;
+    DashboardManager dashboardManager;
+    ReportManager reportManager;
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("loginManager", &loginManager);
@@ -42,6 +46,8 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("adminManager", &adminManager);
     engine.rootContext()->setContextProperty("audioPlayer", &audioPlayer);
     engine.rootContext()->setContextProperty("liveTalkingClient", &liveTalkingClient);
+    engine.rootContext()->setContextProperty("dashboardManager", &dashboardManager);
+    engine.rootContext()->setContextProperty("reportManager", &reportManager);
     engine.rootContext()->setContextProperty("apiService", &ApiService::instance());
 
     engine.addImageProvider("livetalking", new LiveTalkingImageProvider(&liveTalkingClient));

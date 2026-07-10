@@ -144,6 +144,19 @@ public:
     /** 切换用户启用/禁用状态：PUT /api/v1/admin/users/:id/status */
     void toggleUserStatus(int userId, bool isActive);
 
+    // Dashboard
+    void loadDashboardOverview();
+    void loadServiceStats(const QString &period);
+    void loadHotQuestions(int top = 10);
+    void loadSatisfactionTrend(const QString &period);
+    void loadDashboardFull();
+
+    // Reports
+    void loadVisitorInsight(const QString &startDate, const QString &endDate);
+    void loadEmotionTrend(const QString &startDate, const QString &endDate);
+    void loadFocusAnalysis(const QString &startDate, const QString &endDate);
+    void loadServiceSuggestions(const QString &startDate, const QString &endDate);
+
     // Audio playback
 public slots:
     void playAudio(int conversationId, const QString &audioFilename);
@@ -211,6 +224,19 @@ signals:
     void userDeleted(int userId);
     void userStatusChanged(int userId, bool isActive);
     void adminError(const QString &error);
+
+    // Dashboard
+    void dashboardOverviewLoaded(const QVariantMap &data);
+    void serviceStatsLoaded(const QString &period, const QVariantList &stats);
+    void hotQuestionsLoaded(const QVariantList &items);
+    void satisfactionTrendLoaded(const QString &period, const QVariantList &trend);
+    void dashboardFullLoaded(const QVariantMap &data);
+
+    // Reports
+    void visitorInsightLoaded(const QVariantMap &data);
+    void emotionTrendLoaded(const QVariantMap &data);
+    void focusAnalysisLoaded(const QVariantMap &data);
+    void serviceSuggestionsLoaded(const QVariantMap &data);
 
     // Error
     void apiError(const QString &error);

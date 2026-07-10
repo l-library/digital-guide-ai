@@ -1217,6 +1217,271 @@ void ApiService::toggleUserStatus(int userId, bool isActive)
     });
 }
 
+// ==================== Dashboard & Reports ====================
+
+void ApiService::loadDashboardOverview()
+{
+    QUrl url(BASE_URL + "/api/v1/admin/dashboard/overview");
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("获取概览数据失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            emit dashboardOverviewLoaded(resp["data"].toObject().toVariantMap());
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
+void ApiService::loadServiceStats(const QString &period)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/dashboard/service-stats");
+    QUrlQuery query;
+    query.addQueryItem("period", period);
+    url.setQuery(query);
+
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, period]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("获取服务统计失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            QJsonArray arr = resp["data"].toArray();
+            QVariantList stats;
+            for (const QJsonValue &val : arr) {
+                stats.append(val.toVariant());
+            }
+            emit serviceStatsLoaded(period, stats);
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
+void ApiService::loadHotQuestions(int top)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/dashboard/hot-questions");
+    QUrlQuery query;
+    query.addQueryItem("top", QString::number(top));
+    url.setQuery(query);
+
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("获取热门问题失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            QJsonArray arr = resp["data"].toArray();
+            QVariantList items;
+            for (const QJsonValue &val : arr) {
+                items.append(val.toVariant());
+            }
+            emit hotQuestionsLoaded(items);
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
+void ApiService::loadSatisfactionTrend(const QString &period)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/dashboard/satisfaction-trend");
+    QUrlQuery query;
+    query.addQueryItem("period", period);
+    url.setQuery(query);
+
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, period]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("获取满意度趋势失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            QJsonArray arr = resp["data"].toArray();
+            QVariantList trend;
+            for (const QJsonValue &val : arr) {
+                trend.append(val.toVariant());
+            }
+            emit satisfactionTrendLoaded(period, trend);
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
+void ApiService::loadDashboardFull()
+{
+    QUrl url(BASE_URL + "/api/v1/admin/dashboard/full");
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("获取完整面板数据失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            emit dashboardFullLoaded(resp["data"].toObject().toVariantMap());
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
+void ApiService::loadVisitorInsight(const QString &startDate, const QString &endDate)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/reports/visitor-insight");
+    QUrlQuery query;
+    query.addQueryItem("start_date", startDate);
+    query.addQueryItem("end_date", endDate);
+    url.setQuery(query);
+
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("获取访客洞察失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            emit visitorInsightLoaded(resp["data"].toObject().toVariantMap());
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
+void ApiService::loadEmotionTrend(const QString &startDate, const QString &endDate)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/reports/emotion-trend");
+    QUrlQuery query;
+    query.addQueryItem("start_date", startDate);
+    query.addQueryItem("end_date", endDate);
+    url.setQuery(query);
+
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("获取情绪趋势失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            emit emotionTrendLoaded(resp["data"].toObject().toVariantMap());
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
+void ApiService::loadFocusAnalysis(const QString &startDate, const QString &endDate)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/reports/focus-analysis");
+    QUrlQuery query;
+    query.addQueryItem("start_date", startDate);
+    query.addQueryItem("end_date", endDate);
+    url.setQuery(query);
+
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("获取关注分析失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            emit focusAnalysisLoaded(resp["data"].toObject().toVariantMap());
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
+void ApiService::loadServiceSuggestions(const QString &startDate, const QString &endDate)
+{
+    QUrl url(BASE_URL + "/api/v1/admin/reports/service-suggestions");
+    QUrlQuery query;
+    query.addQueryItem("start_date", startDate);
+    query.addQueryItem("end_date", endDate);
+    url.setQuery(query);
+
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("获取服务建议失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            emit serviceSuggestionsLoaded(resp["data"].toObject().toVariantMap());
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
 void ApiService::playAudio(int conversationId, const QString &audioFilename)
 {
     QNetworkRequest request(QUrl(BASE_URL + "/api/v1/play-audio"));
