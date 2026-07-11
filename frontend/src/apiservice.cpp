@@ -84,11 +84,25 @@ void ApiService::login(const QString &username, const QString &password)
     QNetworkReply *reply = m_networkManager->post(req, QJsonDocument(body).toJson());
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
+        QByteArray responseData = reply->readAll();
         if (reply->error() != QNetworkReply::NoError) {
-            emit loginResult(false, QVariantMap(), QStringLiteral("网络错误：无法连接到服务器"));
+            // 尝试从响应体中提取服务器返回的错误详情
+            QJsonObject resp = QJsonDocument::fromJson(responseData).object();
+            // FastAPI HTTPException 返回 {"detail": "..."}
+            if (resp.contains("detail") && resp["detail"].isString()) {
+                emit loginResult(false, QVariantMap(), resp["detail"].toString());
+                return;
+            }
+            // 判断是否为真正的网络错误（无 HTTP 状态码）还是服务器错误
+            int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (statusCode > 0) {
+                emit loginResult(false, QVariantMap(), QStringLiteral("服务器错误，请稍后重试"));
+            } else {
+                emit loginResult(false, QVariantMap(), QStringLiteral("网络错误：无法连接到服务器"));
+            }
             return;
         }
-        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        QJsonObject resp = QJsonDocument::fromJson(responseData).object();
         int code = resp["code"].toInt();
         if (code == 200) {
             QJsonObject data = resp["data"].toObject();
@@ -124,11 +138,22 @@ void ApiService::registerUser(const QString &username, const QString &password,
     QNetworkReply *reply = m_networkManager->post(req, QJsonDocument(body).toJson());
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
+        QByteArray responseData = reply->readAll();
         if (reply->error() != QNetworkReply::NoError) {
-            emit registerResult(false, QVariantMap(), QStringLiteral("网络错误：无法连接到服务器"));
+            QJsonObject resp = QJsonDocument::fromJson(responseData).object();
+            if (resp.contains("detail") && resp["detail"].isString()) {
+                emit registerResult(false, QVariantMap(), resp["detail"].toString());
+                return;
+            }
+            int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (statusCode > 0) {
+                emit registerResult(false, QVariantMap(), QStringLiteral("服务器错误，请稍后重试"));
+            } else {
+                emit registerResult(false, QVariantMap(), QStringLiteral("网络错误：无法连接到服务器"));
+            }
             return;
         }
-        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        QJsonObject resp = QJsonDocument::fromJson(responseData).object();
         int code = resp["code"].toInt();
         if (code == 200) {
             QJsonObject data = resp["data"].toObject();
@@ -163,11 +188,22 @@ void ApiService::updateUserProfile(int userId, const QString &displayName, const
     QNetworkReply *reply = m_networkManager->put(req, QJsonDocument(body).toJson());
     connect(reply, &QNetworkReply::finished, this, [this, reply, userId]() {
         reply->deleteLater();
+        QByteArray responseData = reply->readAll();
         if (reply->error() != QNetworkReply::NoError) {
-            emit profileUpdateResult(false, QVariantMap(), QStringLiteral("网络错误：无法连接到服务器"));
+            QJsonObject resp = QJsonDocument::fromJson(responseData).object();
+            if (resp.contains("detail") && resp["detail"].isString()) {
+                emit profileUpdateResult(false, QVariantMap(), resp["detail"].toString());
+                return;
+            }
+            int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (statusCode > 0) {
+                emit profileUpdateResult(false, QVariantMap(), QStringLiteral("服务器错误，请稍后重试"));
+            } else {
+                emit profileUpdateResult(false, QVariantMap(), QStringLiteral("网络错误：无法连接到服务器"));
+            }
             return;
         }
-        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        QJsonObject resp = QJsonDocument::fromJson(responseData).object();
         int code = resp["code"].toInt();
         if (code == 200) {
             QJsonObject data = resp["data"].toObject();
@@ -201,11 +237,22 @@ void ApiService::changeUserPassword(int userId, const QString &oldPassword, cons
     QNetworkReply *reply = m_networkManager->put(req, QJsonDocument(body).toJson());
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
+        QByteArray responseData = reply->readAll();
         if (reply->error() != QNetworkReply::NoError) {
-            emit passwordChangeResult(false, QStringLiteral("网络错误：无法连接到服务器"));
+            QJsonObject resp = QJsonDocument::fromJson(responseData).object();
+            if (resp.contains("detail") && resp["detail"].isString()) {
+                emit passwordChangeResult(false, resp["detail"].toString());
+                return;
+            }
+            int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            if (statusCode > 0) {
+                emit passwordChangeResult(false, QStringLiteral("服务器错误，请稍后重试"));
+            } else {
+                emit passwordChangeResult(false, QStringLiteral("网络错误：无法连接到服务器"));
+            }
             return;
         }
-        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        QJsonObject resp = QJsonDocument::fromJson(responseData).object();
         int code = resp["code"].toInt();
         if (code == 200) {
             emit passwordChangeResult(true, "");
