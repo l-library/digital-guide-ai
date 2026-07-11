@@ -516,7 +516,10 @@ Page {
     }
 
     ColumnLayout {
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
         spacing: 0
 
         // 分段控件：数字人 / 文字输出 模式切换
@@ -703,8 +706,9 @@ Page {
                     }
                 }
 
-                // 右上角连接状态徽章 - 半透明叠加在视频上
+                // 右上角连接状态徽章 - 已隐藏
                 Rectangle {
+                    visible: false
                     anchors.top: parent.top
                     anchors.right: parent.right
                     anchors.margins: 8
@@ -881,8 +885,100 @@ Button {
                             }
                         }
                     }
-                }
+                } // end voice RowLayout
+            } // end inputArea ColumnLayout
+        } // end Rectangle (input background)
+    } // end ColumnLayout
+
+    // ════════════════════════════════════════════
+    // 推荐路线悬浮按钮
+    // ════════════════════════════════════════════
+    RoundButton {
+        id: recommendFab
+        anchors.right: parent.right
+        anchors.rightMargin: 16
+        anchors.top: parent.top
+        anchors.topMargin: 52
+        width: 44
+        height: 44
+        radius: 22
+
+        Material.background: Material.accent
+        Material.foreground: "white"
+        Material.elevation: 4
+
+        text: "✦"
+        font.pixelSize: 20
+
+        onClicked: {
+            recommendPopup.open()
+        }
+    }
+
+    // ════════════════════════════════════════════
+    // 推荐路线弹出面板
+    // ════════════════════════════════════════════
+    Popup {
+        id: recommendPopup
+        anchors.centerIn: parent
+        width: parent.width * 0.85
+        height: parent.height * 0.75
+        modal: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        padding: 0
+
+        background: Rectangle {
+            radius: 12
+            color: "#F5F5F5"
+            border.width: 1
+            border.color: "#E0E0E0"
+        }
+
+        // Header bar
+        Rectangle {
+            id: popupHeader
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 48
+            radius: 12
+            color: "#1976D2"
+
+            Rectangle {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                height: parent.height - 12
+                color: "#1976D2"
             }
+
+            Label {
+                anchors.centerIn: parent
+                text: qsTr("个性化路线推荐")
+                font.pixelSize: 16
+                font.bold: true
+                color: "white"
+            }
+
+            ToolButton {
+                anchors.right: parent.right
+                anchors.rightMargin: 4
+                anchors.verticalCenter: parent.verticalCenter
+                text: qsTr("✕")
+                font.pixelSize: 16
+                onClicked: recommendPopup.close()
+            }
+        }
+
+        // Content area
+        Loader {
+            id: popupRecommendLoader
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: popupHeader.bottom
+            anchors.bottom: parent.bottom
+            active: recommendPopup.opened
+            source: "RecommendTab.qml"
         }
     }
 

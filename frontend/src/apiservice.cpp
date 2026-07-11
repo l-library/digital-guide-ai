@@ -1482,6 +1482,41 @@ void ApiService::loadServiceSuggestions(const QString &startDate, const QString 
     });
 }
 
+void ApiService::loadRecommendRoute(int userId)
+{
+    QUrl url(BASE_URL + "/api/v1/recommend/route");
+    QNetworkRequest req(url);
+    req.setTransferTimeout(15000);
+    req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+
+    QJsonObject body;
+    body["user_id"] = userId;
+
+    QNetworkReply *reply = m_networkManager->post(req, QJsonDocument(body).toJson());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("推荐加载失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            QJsonObject data = resp["data"].toObject();
+            QJsonArray routes = data["routes"].toArray();
+            QVariantMap route;
+            if (!routes.isEmpty()) {
+                route = routes[0].toObject().toVariantMap();
+            }
+            emit recommendRouteLoaded(route);
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
 void ApiService::playAudio(int conversationId, const QString &audioFilename)
 {
     QNetworkRequest request(QUrl(BASE_URL + "/api/v1/play-audio"));

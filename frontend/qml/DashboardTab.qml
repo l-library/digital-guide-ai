@@ -84,6 +84,12 @@ Item {
                     suffix: "%"
                     floatValue: dashboardManager.overview ? Math.round((dashboardManager.overview.avgSatisfaction || 0) * 100) : 0
                 }
+                // Card 5: Recommend Count
+                DashboardCard {
+                    title: qsTr("推荐次数")
+                    value: dashboardManager.overview ? (dashboardManager.overview.recommendCount || 0) : 0
+                    accentColor: "#E91E63"
+                }
             }
 
             // ── Section: Service Trend Chart ──────────

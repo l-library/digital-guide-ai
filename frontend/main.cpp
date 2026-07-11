@@ -16,6 +16,7 @@
 #include "src/livetalkingclient.h"
 #include "src/dashboardmanager.h"
 #include "src/reportmanager.h"
+#include "src/recommendmanager.h"
 
 int main(int argc, char *argv[])
 {
@@ -35,6 +36,7 @@ int main(int argc, char *argv[])
     LiveTalkingClient liveTalkingClient;
     DashboardManager dashboardManager;
     ReportManager reportManager;
+    RecommendManager recommendManager;
 
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("loginManager", &loginManager);
@@ -48,6 +50,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("liveTalkingClient", &liveTalkingClient);
     engine.rootContext()->setContextProperty("dashboardManager", &dashboardManager);
     engine.rootContext()->setContextProperty("reportManager", &reportManager);
+    engine.rootContext()->setContextProperty("recommendManager", &recommendManager);
     engine.rootContext()->setContextProperty("apiService", &ApiService::instance());
 
     engine.addImageProvider("livetalking", new LiveTalkingImageProvider(&liveTalkingClient));

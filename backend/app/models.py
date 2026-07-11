@@ -1,6 +1,7 @@
 """
 数据库模型：对话（Conversation）和消息（Message）
 """
+import json
 from datetime import datetime
 from sqlalchemy import Boolean, Column, Integer, String, Text, DateTime, ForeignKey, JSON, func
 from app.database import Base
@@ -106,6 +107,8 @@ class User(Base):
     phone = Column(String(20), nullable=True)
     email = Column(String(128), nullable=True)
     avatar_url = Column(String(512), nullable=True)
+    interests = Column(String(512), nullable=True, default="[]")
+    last_interest_update = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=func.now())
 
     def to_dict(self):
@@ -119,5 +122,17 @@ class User(Base):
             "email": self.email,
             "is_active": self.is_active,
             "avatar_url": self.avatar_url,
+            "interests": json.loads(self.interests) if self.interests else [],
+            "last_interest_update": self.last_interest_update.isoformat() + "Z" if self.last_interest_update else None,
             "created_at": self.created_at.isoformat() + "Z" if self.created_at else None,
         }
+
+
+class RecommendLog(Base):
+    """推荐日志表"""
+    __tablename__ = "recommend_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    interests_used = Column(String(512), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -157,6 +157,9 @@ public:
     void loadFocusAnalysis(const QString &startDate, const QString &endDate);
     void loadServiceSuggestions(const QString &startDate, const QString &endDate);
 
+    // Recommend
+    void loadRecommendRoute(int userId);
+
     // Audio playback
 public slots:
     void playAudio(int conversationId, const QString &audioFilename);
@@ -237,6 +240,9 @@ signals:
     void emotionTrendLoaded(const QVariantMap &data);
     void focusAnalysisLoaded(const QVariantMap &data);
     void serviceSuggestionsLoaded(const QVariantMap &data);
+
+    // Recommend
+    void recommendRouteLoaded(const QVariantMap &route);
 
     // Error
     void apiError(const QString &error);

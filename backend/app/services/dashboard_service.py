@@ -5,7 +5,7 @@
 """
 from datetime import datetime, timedelta
 from sqlalchemy import func, text
-from app.models import Conversation, Message, KnowledgeDoc
+from app.models import Conversation, Message, KnowledgeDoc, RecommendLog
 
 # ---- 情感词词典（启发式方法，替代 report_service） ----
 
@@ -93,6 +93,11 @@ def get_overview(db):
     # ---- 平均满意度（全体用户消息） ----
     avg_satisfaction = _calc_satisfaction(db)
 
+    # ---- 推荐次数（今日） ----
+    recommend_count = db.query(func.count(RecommendLog.id)).filter(
+        RecommendLog.created_at >= today_start,
+    ).scalar() or 0
+
     # ---- 平均响应时间：同一对话中连续 user → assistant 的时间差均值 ----
     sql = text("""
         WITH ranked AS (
@@ -118,6 +123,7 @@ def get_overview(db):
         "total_knowledge_docs": total_knowledge_docs,
         "avg_satisfaction": round(avg_satisfaction * 5.0, 1),
         "avg_response_time_ms": avg_response_time_ms,
+        "recommend_count": recommend_count,
     }
 
 

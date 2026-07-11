@@ -52,3 +52,36 @@ service_suggestions: |
 
   游客提问记录：
   {questions_text}
+
+# ── 兴趣推理（个性化推荐） ──
+# 占位符: {questions_text} = 游客提问记录（每行一条）, {categories_text} = 已知类别
+interest_inference: |
+  你是一个景区导览系统的用户兴趣分析助手。以下是一位游客最近向导游AI提问的记录：
+  
+  {questions_text}
+  
+  请根据以上提问内容，推断这位游客最可能的兴趣领域。
+  从以下类别中选择最多 5 个：{categories_text}。
+  
+  请只返回一个 JSON 数组，不要包含任何其他内容。
+  示例：["历史文化", "建筑特色"]
+
+# ── 路线推荐（个性化推荐） ──
+# 占位符: {scenic_spot} = 景区名, {interests_text} = 兴趣标签, {context_text} = RAG 检索资料
+route_recommendation: |
+  你是一个景区导览系统的路线规划助手。请根据以下信息为游客生成一条个性化游览路线。
+  
+  景区名称：{scenic_spot}
+  游客兴趣标签：{interests_text}
+  
+  参考资料：
+  {context_text}
+  
+  请返回一个 JSON 对象（不要包含任何其他内容），格式如下：
+  {{"name": "路线名称", "duration_minutes": 120, "spots": [{{"name": "景点名", "description": "简介", "estimated_minutes": 30}}], "highlights": ["亮点1", "亮点2"], "match_reason": "匹配理由"}}
+  
+  要求：
+  - spots 中每个景点的 description 不超过 150 字
+  - duration_minutes 为整数
+  - match_reason 说明该路线为何适合该游客的兴趣
+  - 只返回 JSON，不要有任何解释或额外文字

@@ -53,3 +53,19 @@ def get_service_suggestions_prompt(questions_text: str) -> str:
     """构建服务改进建议 prompt"""
     template = _load_prompts()["service_suggestions"]
     return template.format(questions_text=questions_text)
+
+
+def get_interest_inference_prompt(questions_text: str, categories_text: str) -> str:
+    """构建兴趣推理 prompt"""
+    template = _load_prompts()["interest_inference"]
+    return template.format(questions_text=questions_text, categories_text=categories_text)
+
+
+def get_route_recommendation_prompt(scenic_spot: str, interests_text: str, context_text: str) -> str:
+    """构建路线推荐 prompt"""
+    template = _load_prompts()["route_recommendation"]
+    return template.format(
+        scenic_spot=scenic_spot,
+        interests_text=interests_text,
+        context_text=context_text,
+    )

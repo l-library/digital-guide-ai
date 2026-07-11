@@ -40,6 +40,13 @@ def init_db():
     # SQLite 迁移：为已有 users 表补充新增字段
     _add_column_if_missing(engine, "users", "is_active", "is_active BOOLEAN DEFAULT 1")
     _add_column_if_missing(engine, "users", "token_version", "token_version INTEGER DEFAULT 0")
+    _add_column_if_missing(engine, "users", "interests", "interests TEXT DEFAULT '[]'")
+    _add_column_if_missing(engine, "users", "last_interest_update", "last_interest_update DATETIME")
+
+    # 推荐日志保留 90 天，定期清理
+    with engine.connect() as conn:
+        conn.execute(text("DELETE FROM recommend_logs WHERE created_at < date('now', '-90 days')"))
+        conn.commit()
 
 
 def get_db():
