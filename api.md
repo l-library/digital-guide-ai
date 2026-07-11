@@ -213,7 +213,7 @@ POST /chat/text
 | `conversation_id`  | int    | 是   | 当前对话 ID                              |
 | `content`          | string | 是   | 用户消息                                 |
 | `response_type`    | int    | 是   | 需要的输出方式，1为语音+文字输出，0为仅文字输出。当输出模式为"数字人"时应传1，为"文字输出"时应传0 |
-| `digital_human_id` | int    | 否   | 数字人形象 ID，不传使用默认              |
+| `digital_human_id` | int    | 否   | 数字人形象 ID，固定为 1（默认），前端不再提供选择入口 |
 
 **Response `data`:**
 
@@ -247,7 +247,7 @@ POST /chat/voice
 | ------------------ | ---- | ---- | -------------------------------- |
 | `audio`            | File | 是   | 语音文件，WAV/MP3/OGG，最大 10MB |
 | `conversation_id`  | int  | 是   | 当前对话 ID                      |
-| `digital_human_id` | int  | 否   | 数字人形象 ID                    |
+| `digital_human_id` | int  | 否   | 数字人形象 ID，固定为 1（默认），前端不再提供选择入口 |
 
 **Response `data`:**
 
@@ -278,7 +278,7 @@ POST /chat/voice_stream
 | ------------------ | ---- | ---- | -------------------------------- |
 | `audio`            | File | 是   | 语音文件，WAV/MP3/OGG，最大 10MB |
 | `conversation_id`  | int  | 是   | 当前对话 ID                      |
-| `digital_human_id` | int  | 否   | 数字人形象 ID                    |
+| `digital_human_id` | int  | 否   | 数字人形象 ID，固定为 1（默认），前端不再提供选择入口 |
 | `response_type`    | int  | 否   | 输出方式，1为语音+文字输出，0为仅文字输出，默认1 |
 
 **SSE 事件流：**
@@ -427,6 +427,8 @@ WebSocket /ws/chat?token=<JWT_TOKEN>
   "response_type": 1
 }
 ```
+
+> `digital_human_id` 固定为 1（默认），前端不再提供选择入口。
 
 ```json
 {
@@ -822,6 +824,8 @@ POST /admin/knowledge-docs/{doc_id}/process
 
 ## 六、数字人形象管理（管理员）
 
+> ⚠️ **未实现**：数字人选择功能暂未在后端实现，前端已移除数字人选择入口。所有请求中的 `digital_human_id` 固定为 1（默认数字人）。以下接口定义保留供后续扩展。
+
 ### 6.1 创建数字人形象
 
 ```
@@ -1206,7 +1210,6 @@ GET /settings?user_id=1
   "user_id": 1,
   "settings": {
     "tts_enabled": true,
-    "default_digital_human_id": 1,
     "theme": "light",
     "language": "zh-CN"
   }
@@ -1225,8 +1228,7 @@ PUT /settings
 {
   "user_id": 1,
   "settings": {
-    "tts_enabled": false,
-    "default_digital_human_id": 2
+    "tts_enabled": false
   }
 }
 ```

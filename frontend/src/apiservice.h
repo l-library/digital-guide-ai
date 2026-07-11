@@ -120,9 +120,7 @@ public:
     void deleteKnowledgeDoc(int docId);
     void loadKnowledgeDocs(int userId);
 
-    // Digital humans
-    void loadDigitalHumans();
-    void setDefaultDigitalHuman(int dhId);
+    // Digital humans（数字人选择功能已移除，digital_human_id 硬编码为 1）
     void registerLiveTalkingSession(int conversationId, const QString &sessionId);
 
     // Settings
@@ -205,9 +203,7 @@ signals:
     void knowledgeDocDeleted(bool success);
     void knowledgeDocsLoaded(QVariantList docs);
 
-    // Digital humans
-    void digitalHumansLoaded(QVariantList digitalHumans);
-    void defaultDigitalHumanSet(bool success);
+    // Digital humans（选择功能已移除）
 
     // Settings
     void settingLoaded(const QString &key, const QString &value);
@@ -260,8 +256,8 @@ private:
     QNetworkReply *m_voiceStreamReply = nullptr;
     QByteArray m_sseBuffer;
     QByteArray m_voiceSseBuffer;
-    QVariantList m_stubDigitalHumans;
 
+    // 数字人选择功能已移除
     void initStubData();
     QVariantList mapMessagesToFrontendFormat(const QVariantList &items) const;
 };

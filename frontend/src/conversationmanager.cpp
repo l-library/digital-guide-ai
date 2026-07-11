@@ -438,11 +438,6 @@ void ConversationManager::setResponseType(int type)
     m_responseType = type;
 }
 
-void ConversationManager::setDigitalHumanId(int id)
-{
-    m_digitalHumanId = id;
-}
-
 void ConversationManager::setCurrentAudioUrl(const QString &url)
 {
     if (m_currentAudioUrl != url) {

@@ -26,31 +26,11 @@ ApiService::ApiService(QObject *parent)
     , m_networkManager(new QNetworkAccessManager(this))
     , m_webSocket(nullptr)
 {
-    initStubData();
 }
 
 void ApiService::initStubData()
 {
-    QVariantMap dh1, dh2, dh3;
-    dh1["id"] = 1;
-    dh1["name"] = QStringLiteral("小导");
-    dh1["description"] = QStringLiteral("标准导游数字人");
-    dh1["avatarUrl"] = "";
-    dh1["isDefault"] = true;
-
-    dh2["id"] = 2;
-    dh2["name"] = QStringLiteral("小薇");
-    dh2["description"] = QStringLiteral("温柔风格导游");
-    dh2["avatarUrl"] = "";
-    dh2["isDefault"] = false;
-
-    dh3["id"] = 3;
-    dh3["name"] = QStringLiteral("小智");
-    dh3["description"] = QStringLiteral("知识型导游");
-    dh3["avatarUrl"] = "";
-    dh3["isDefault"] = false;
-
-    m_stubDigitalHumans = {dh1, dh2, dh3};
+    // 数字人选择功能已移除，不再需要存根数据
 }
 
 QVariantList ApiService::mapMessagesToFrontendFormat(const QVariantList &items) const
@@ -923,80 +903,7 @@ void ApiService::loadKnowledgeDocs(int)
     });
 }
 
-// ==================== Digital humans (stubs) ====================
-
-void ApiService::loadDigitalHumans()
-{
-    QNetworkRequest req(QUrl(BASE_URL + "/api/v1/admin/digital-humans"));
-    if (!m_authToken.isEmpty()) {
-        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
-    }
-    req.setTransferTimeout(15000);
-
-    QNetworkReply *reply = m_networkManager->get(req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "loadDigitalHumans error:" << reply->errorString();
-            // Fall back to stub data on network error
-            emit digitalHumansLoaded(m_stubDigitalHumans);
-            return;
-        }
-        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
-        QJsonArray items;
-        if (resp.contains("items")) {
-            items = resp["items"].toArray();
-        } else if (resp.contains("data") && resp["data"].isObject()) {
-            items = resp["data"].toObject()["items"].toArray();
-        }
-
-        QVariantList dhs;
-        for (const QJsonValue &val : items) {
-            QJsonObject obj = val.toObject();
-            QVariantMap dh;
-            dh["id"] = obj["digital_human_id"].toInt();
-            dh["name"] = obj["name"].toString();
-            dh["description"] = obj["description"].toString();
-            dh["avatarUrl"] = obj["avatar_url"].toString();
-            dh["isDefault"] = obj["is_default"].toBool();
-            dhs.append(dh);
-        }
-
-        if (dhs.isEmpty()) {
-            // Fall back to stub data if API returns empty
-            emit digitalHumansLoaded(m_stubDigitalHumans);
-        } else {
-            emit digitalHumansLoaded(dhs);
-        }
-    });
-}
-
-void ApiService::setDefaultDigitalHuman(int dhId)
-{
-    QUrl url(BASE_URL + "/api/v1/admin/digital-humans/" + QString::number(dhId) + "/default");
-    QNetworkRequest req(url);
-    if (!m_authToken.isEmpty()) {
-        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
-    }
-    req.setTransferTimeout(15000);
-
-    QNetworkReply *reply = m_networkManager->put(req, QByteArray());
-    connect(reply, &QNetworkReply::finished, this, [this, reply, dhId]() {
-        reply->deleteLater();
-        if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "setDefaultDigitalHuman error:" << reply->errorString();
-            emit defaultDigitalHumanSet(false);
-            return;
-        }
-        // Update local stub data to reflect the change
-        for (auto &dh : m_stubDigitalHumans) {
-            QVariantMap dhm = dh.toMap();
-            dhm["isDefault"] = (dhm["id"].toInt() == dhId);
-            dh = dhm;
-        }
-        emit defaultDigitalHumanSet(true);
-    });
-}
+// ==================== Digital humans（选择功能已移除，digital_human_id 硬编码为 1）====================
 
 void ApiService::registerLiveTalkingSession(int conversationId, const QString &sessionId)
 {

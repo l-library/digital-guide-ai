@@ -49,7 +49,7 @@ public:
     Q_INVOKABLE void disconnectWebSocket();
 
     Q_INVOKABLE void setResponseType(int type);
-    Q_INVOKABLE void setDigitalHumanId(int id);
+    // 数字人选择功能已移除，digital_human_id 硬编码为 1
 
     Q_INVOKABLE void playNextSentence();
     Q_INVOKABLE void clearAudioQueue();
