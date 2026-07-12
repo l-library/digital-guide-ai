@@ -9,18 +9,14 @@ import torch
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+from app.config.paths import KNOWLEDGE_DOCS_DIR, BGE_MODEL_DIR, LINGSHAN_STORE_DIR
 
 logger = logging.getLogger(__name__)
 
-# 自动定位项目路径，并规范化知识库存储目录
-CURRENT_DIR = os.path.abspath(__file__)
-BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(CURRENT_DIR)))
-
-DATA_DIR = os.path.join(BACKEND_DIR, "data", "knowledge_docs")
-MODEL_PATH = os.path.join(BACKEND_DIR, "models", "bge-small-zh-v1.5")
-VECTOR_STORE_DIR = os.path.join(BACKEND_DIR, "vector_store", "lingshan")
-
-os.makedirs(DATA_DIR, exist_ok=True)
+# 保持向后兼容的变量名（admin.py / admin_service.py 通过 from knowledge_service import 引用）
+DATA_DIR = KNOWLEDGE_DOCS_DIR
+MODEL_PATH = BGE_MODEL_DIR
+VECTOR_STORE_DIR = LINGSHAN_STORE_DIR
 
 # 懒加载 embedding 模型，避免模块导入时立即初始化（与 RAG 服务的 embedding 模型隔离）
 _embeddings = None

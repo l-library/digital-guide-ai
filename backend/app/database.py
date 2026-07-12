@@ -2,16 +2,14 @@
 数据库连接和会话管理（SQLAlchemy + SQLite）
 """
 import logging
-import os
 from sqlalchemy import create_engine, text
+from app.config.paths import DB_PATH
 
 logger = logging.getLogger(__name__)
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-# 数据库文件路径：backend/app/data/app.db
-DB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
-os.makedirs(DB_DIR, exist_ok=True)
-DATABASE_URL = f"sqlite:///{os.path.join(DB_DIR, 'app.db')}"
+# 数据库文件路径：backend/data/app.db
+DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(
     DATABASE_URL,

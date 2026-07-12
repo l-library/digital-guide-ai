@@ -16,11 +16,9 @@ from app.services.tts_service import synthesize_to_file
 from app.services.llm_service import generate_stream_async
 from app.services.digital_human_client import get_client as get_dh_client
 from app.services.digital_human_session import get_session_id
+from app.config.paths import TEMP_AUDIO_DIR
 import logging
 logger = logging.getLogger(__name__)
-
-TEMP_AUDIO_DIR = os.path.abspath(os.path.join("data", "temp_audios"))
-os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
 
 
 

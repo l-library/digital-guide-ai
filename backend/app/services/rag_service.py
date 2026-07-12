@@ -1,17 +1,12 @@
 import logging
-import os
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
+from app.config.paths import LINGSHAN_STORE_DIR, BGE_MODEL_DIR
 
 logger = logging.getLogger(__name__)
 
-VECTOR_STORE_PATH = "vector_store/lingshan"
-
-model_path = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    "models",
-    "bge-small-zh-v1.5",
-)
+VECTOR_STORE_PATH = LINGSHAN_STORE_DIR
+model_path = BGE_MODEL_DIR
 
 # 1. 意图识别
 # 根据问题关键词判断应该在哪个category里检索

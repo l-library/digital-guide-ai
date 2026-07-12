@@ -4,6 +4,7 @@ import whisper
 import torch
 import warnings
 import os
+from app.config.paths import MODELS_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -11,10 +12,6 @@ warnings.filterwarnings("ignore")
 
 _device = "cpu"
 logger.info(f"语音模块将使用设备: {_device}")
-
-# 模型路径：backend/models
-_current_dir = os.path.dirname(os.path.abspath(__file__))
-_models_dir = os.path.join(_current_dir, "..", "..", "models")
 
 _model = None
 
@@ -24,7 +21,7 @@ def _get_model():
     global _model
     if _model is None:
         logger.info("正在加载 Whisper Base 模型，首次加载可能需要较长时间...")
-        _model = whisper.load_model("base", device=_device, download_root=_models_dir)
+        _model = whisper.load_model("base", device=_device, download_root=MODELS_DIR)
         logger.info("Whisper 模型加载完成")
     return _model
 
