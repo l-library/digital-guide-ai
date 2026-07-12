@@ -7,6 +7,9 @@ import os
 import time
 import json
 import asyncio
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.services.rag_service import retrieve_context, build_prompt
 from app.services.llm_service import (
@@ -151,7 +154,7 @@ async def handle_text_chat_with_persistence(
     req: ChatTextRequest, db: Session = Depends(get_db)
 ):
     user_text = req.content
-    print(f"收到文本提问（对话{req.conversation_id}）：{user_text}")
+    pass  # print intentionally removed (user content privacy)
 
     conv = db.query(Conversation).filter(Conversation.id == req.conversation_id).first()
     if not conv:
@@ -197,7 +200,7 @@ async def handle_text_chat_with_persistence(
                     req.conversation_id, audio_filename
                 )
         except Exception as e:
-            print(f"[TTS失败] {e}")
+            logger.error(f"[TTS失败] {e}")
 
     assistant_msg = Message(
         conversation_id=req.conversation_id,
@@ -241,7 +244,7 @@ async def handle_text_chat_with_persistence(
 def handle_text_chat(request: SimpleChatRequest):
     """纯文本问答（简单版，无持久化，用于快速测试）"""
     user_text = request.question
-    print(f"收到文本提问：{user_text}")
+    pass  # print intentionally removed (user content privacy)
 
     context_list = retrieve_context(user_text)
     prompt = build_prompt(user_text, context_list)
@@ -283,7 +286,7 @@ async def handle_voice_chat(
         async def event_generator():
             try:
                 user_text = await asyncio.to_thread(transcribe_audio, input_audio_path)
-                print(f"[chat_voice] 识别结果：{user_text}")
+                pass  # print intentionally removed (user content privacy)
 
                 if user_text.startswith("语音识别失败:"):
                     yield f"data: {json.dumps({'type': 'error', 'conversation_id': conversation_id, 'message': user_text}, ensure_ascii=False)}\n\n"
@@ -392,7 +395,7 @@ async def handle_voice_stream(
         async def event_generator():
             try:
                 user_text = await asyncio.to_thread(transcribe_audio, input_audio_path)
-                print(f"[voice_stream] 识别结果：{user_text}")
+                pass  # print intentionally removed (user content privacy)
 
                 if user_text.startswith("语音识别失败:"):
                     yield f"data: {json.dumps({'type': 'error', 'conversation_id': conversation_id, 'message': user_text}, ensure_ascii=False)}\n\n"

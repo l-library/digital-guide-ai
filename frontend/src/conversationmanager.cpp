@@ -34,7 +34,6 @@ ConversationManager::ConversationManager(QObject *parent)
         } else if (!m_pendingVoiceFilePath.isEmpty()) {
             QString filePath = m_pendingVoiceFilePath;
             m_pendingVoiceFilePath.clear();
-            qDebug() << "ConversationManager: 对话创建完成，发送暂存语音:" << filePath;
             ApiService::instance().sendVoiceMessage(m_currentConversationId, filePath, m_digitalHumanId, m_responseType);
         }
 
@@ -52,8 +51,15 @@ ConversationManager::ConversationManager(QObject *parent)
             m_autoLoadPending = false;
             if (!convs.isEmpty()) {
                 QVariantMap first = convs.first().toMap();
-                int convId = first["id"].toInt();
-                loadConversation(convId);
+                int messageCount = first["message_count"].toInt();
+                if (messageCount == 0) {
+                    // 最新对话为空 → 复用，避免创建重复空对话
+                    int convId = first["id"].toInt();
+                    loadConversation(convId);
+                } else {
+                    // 最新对话有消息 → 新建
+                    startNewConversation(m_currentUserId, QStringLiteral("新对话"));
+                }
             } else {
                 startNewConversation(m_currentUserId, QStringLiteral("新对话"));
             }
@@ -161,9 +167,6 @@ ConversationManager::ConversationManager(QObject *parent)
         if (m_currentAudioIndex >= m_audioQueue.size()) return;
         if (m_prePushedIndex == m_currentAudioIndex) return;
         const SentenceAudioItem &nextItem = m_audioQueue.at(m_currentAudioIndex);
-        qDebug() << "[预推送-延迟] 句" << nextItem.index << "预推送（定时器触发）"
-                 << "audio=" << nextItem.audioFilename
-                 << "time=" << QDateTime::currentMSecsSinceEpoch() << "ms";
         ApiService::instance().playAudioQueued(m_activeConversationId, nextItem.audioFilename);
         m_prePushedIndex = m_currentAudioIndex;
     });
@@ -234,13 +237,11 @@ void ConversationManager::sendVoiceMessage(const QString &audioFilePath)
     }
 
     if (m_currentConversationId <= 0) {
-        qDebug() << "ConversationManager::sendVoiceMessage: 无有效对话，丢弃语音";
         return;
     }
 
     emit messageSending();
 
-    qDebug() << "ConversationManager::sendVoiceMessage: 发送语音到对话" << m_currentConversationId;
     ApiService::instance().sendVoiceMessage(m_currentConversationId, audioFilePath, m_digitalHumanId, m_responseType);
 }
 
@@ -268,6 +269,17 @@ void ConversationManager::loadConversation(int conversationId)
 
 int ConversationManager::startNewConversation(int userId, const QString &title, int knowledgeDocId)
 {
+    // 如果当前对话为空（无消息），静默复用，避免创建重复空对话
+    if (m_currentConversationId > 0 && m_messages.isEmpty()) {
+        m_currentUserId = userId;
+        m_currentTitle = title;
+        m_pendingKnowledgeDocId = knowledgeDocId;
+        m_pendingVoiceFilePath.clear();
+        clearAudioQueue();
+        emit currentConversationChanged();
+        return m_currentConversationId;
+    }
+
     m_currentUserId = userId;
     m_currentTitle = title;
     m_currentConversationId = -1;
@@ -470,9 +482,6 @@ void ConversationManager::enqueueSentenceAudio(int conversationId, int index,
                   return a.index < b.index;
               });
 
-    qDebug() << "SentenceAudioQueue: enqueued index=" << index
-             << "audio=" << audioFilename << "duration=" << duration;
-
     // 有待播放的句子且当前未在播放 → 立即启动
     if (m_currentAudioIndex < m_audioQueue.size() && !m_playbackActive) {
         playNextSentence();
@@ -493,12 +502,9 @@ void ConversationManager::enqueueSentenceAudio(int conversationId, int index,
                 // 剩余时间充足（>2.3s），延迟预推送
                 if (!m_prePushTimer.isActive()) {
                     m_prePushTimer.start(static_cast<int>(prePushDelayMs));
-                    qDebug() << "[预推送-延迟] 将在" << prePushDelayMs / 1000.0 << "s后预推送句" << nextItem.index;
                 }
             } else {
                 // 剩余时间不多（≤2.3s），立即预推送
-                qDebug() << "[预推送] 句" << nextItem.index << "已入队，立即预推送（剩余" << remainingMs << "ms）"
-                         << "audio=" << nextItem.audioFilename;
                 ApiService::instance().playAudioQueued(m_activeConversationId, nextItem.audioFilename);
                 m_prePushedIndex = m_currentAudioIndex;
                 m_prePushTimer.stop();
@@ -510,7 +516,6 @@ void ConversationManager::enqueueSentenceAudio(int conversationId, int index,
 void ConversationManager::playNextSentence()
 {
     if (m_currentAudioIndex >= m_audioQueue.size()) {
-        qDebug() << "SentenceAudioQueue: queue exhausted, waiting for more sentences";
         m_playbackActive = false;
         emit playbackActiveChanged();
         emit allSentencesPlayed();
@@ -524,18 +529,11 @@ void ConversationManager::playNextSentence()
 
     // 用拷贝避免后续队列变动导致引用失效
     const SentenceAudioItem item = m_audioQueue.at(m_currentAudioIndex);
-    qDebug() << "[间隔测算] playNextSentence 调用 playAudio"
-             << "index=" << item.index
-             << "time=" << QDateTime::currentMSecsSinceEpoch() << "ms";
-    qDebug() << "SentenceAudioQueue: playing index=" << item.index
-             << "audio=" << item.audioFilename;
-
     // 如果本句已被预推送，不重复发送音频文件，改为通知 LiveTalking
     // 将待处理队列中的下一句推入推理管道（flush）
     if (m_prePushedIndex != item.index) {
         ApiService::instance().playAudio(m_activeConversationId, item.audioFilename);
     } else {
-        qDebug() << "[预推送] 句" << item.index << "已预推送，通知 LiveTalking flush 队列";
         ApiService::instance().flushAudio(m_activeConversationId);
     }
 
@@ -559,8 +557,6 @@ void ConversationManager::advancePlayback()
     m_currentSentencePlaying = false;
     m_playbackWatchdog.stop();
     m_prePushTimer.stop();
-    qDebug() << "[间隔测算] advancePlayback 触发（speakingFinished/watchdog）"
-             << "time=" << QDateTime::currentMSecsSinceEpoch() << "ms";
     playNextSentence();
 }
 
@@ -582,14 +578,10 @@ void ConversationManager::onCurrentSentenceStarted()
         // 延迟预推送：当前句够长（>2.3s），等剩 ~2s 时再推送
         // 避免立即推送导致 LiveTalking GPU 同时推理两句口型 → 视频卡顿
         m_prePushTimer.start(static_cast<int>(prePushDelay * 1000));
-        qDebug() << "[预推送-延迟] 将在" << prePushDelay << "s后预推送句"
-                 << m_audioQueue.at(m_currentAudioIndex).index;
     } else if (prePushDelay <= 0.3 && m_currentAudioIndex < m_audioQueue.size()
                && m_prePushedIndex != m_currentAudioIndex) {
         // 当前句较短（≤2.3s），立即预推送（无足够延迟窗口）
         const SentenceAudioItem &nextItem = m_audioQueue.at(m_currentAudioIndex);
-        qDebug() << "[预推送] 句" << nextItem.index << "立即预推送（当前句太短，无延迟窗口）"
-                 << "duration=" << currentItem.duration;
         ApiService::instance().playAudioQueued(m_activeConversationId, nextItem.audioFilename);
         m_prePushedIndex = m_currentAudioIndex;
     }
@@ -610,5 +602,4 @@ void ConversationManager::clearAudioQueue()
         m_playbackActive = false;
         emit playbackActiveChanged();
     }
-    qDebug() << "SentenceAudioQueue: cleared";
 }

@@ -1,8 +1,11 @@
 """
 数据库连接和会话管理（SQLAlchemy + SQLite）
 """
+import logging
 import os
 from sqlalchemy import create_engine, text
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # 数据库文件路径：backend/app/data/app.db
@@ -29,7 +32,7 @@ def _add_column_if_missing(engine, table_name, column_name, column_def):
         if column_name not in columns:
             conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_def}"))
             conn.commit()
-            print(f"[migration] 已添加列: {table_name}.{column_name}")
+            logger.info(f"[migration] 已添加列: {table_name}.{column_name}")
 
 
 def init_db():

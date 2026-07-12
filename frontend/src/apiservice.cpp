@@ -353,7 +353,7 @@ void ApiService::createConversation(int userId, const QString &title, int knowle
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "createConversation error:" << reply->errorString();
+            qWarning() << "createConversation error:" << reply->errorString();
             emit apiError("创建对话失败");
             return;
         }
@@ -376,7 +376,7 @@ void ApiService::loadConversations(int userId)
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "loadConversations error:" << reply->errorString();
+            qWarning() << "loadConversations error:" << reply->errorString();
             emit apiError("加载对话列表失败");
             return;
         }
@@ -412,7 +412,7 @@ void ApiService::loadConversationsGroupedByDate(int userId)
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "loadConversationsGroupedByDate error:" << reply->errorString();
+            qWarning() << "loadConversationsGroupedByDate error:" << reply->errorString();
             emit apiError("加载分组对话失败");
             return;
         }
@@ -454,7 +454,7 @@ void ApiService::deleteConversation(int conversationId)
         reply->deleteLater();
         bool success = (reply->error() == QNetworkReply::NoError);
         if (!success) {
-            qDebug() << "deleteConversation error:" << reply->errorString();
+            qWarning() << "deleteConversation error:" << reply->errorString();
         }
         emit conversationDeleted(success);
     });
@@ -474,7 +474,7 @@ void ApiService::renameConversation(int conversationId, const QString &newTitle)
     connect(reply, &QNetworkReply::finished, this, [this, reply, conversationId, newTitle]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "renameConversation error:" << reply->errorString();
+            qWarning() << "renameConversation error:" << reply->errorString();
             emit apiError("重命名对话失败");
             return;
         }
@@ -492,7 +492,7 @@ void ApiService::loadMessages(int conversationId)
     connect(reply, &QNetworkReply::finished, this, [this, reply, conversationId]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "loadMessages error:" << reply->errorString();
+            qWarning() << "loadMessages error:" << reply->errorString();
             emit messagesLoaded(QVariantList(), conversationId);
             return;
         }
@@ -817,13 +817,12 @@ void ApiService::uploadKnowledgeDoc(int userId, const QString &title, const QStr
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "uploadKnowledgeDoc error:" << reply->errorString();
+            qWarning() << "uploadKnowledgeDoc error:" << reply->errorString();
             emit apiError(QStringLiteral("文档上传失败: ") + reply->errorString());
             return;
         }
         QByteArray responseData = reply->readAll();
         QJsonObject resp = QJsonDocument::fromJson(responseData).object();
-        qDebug() << "uploadKnowledgeDoc response:" << responseData;
 
         // 兼容两种响应格式：直接返回数据 或 包在 data 字段中
         int docId = 0;
@@ -853,7 +852,7 @@ void ApiService::deleteKnowledgeDoc(int docId)
         reply->deleteLater();
         bool success = (reply->error() == QNetworkReply::NoError);
         if (!success) {
-            qDebug() << "deleteKnowledgeDoc error:" << reply->errorString();
+            qWarning() << "deleteKnowledgeDoc error:" << reply->errorString();
         }
         emit knowledgeDocDeleted(success);
     });
@@ -870,13 +869,12 @@ void ApiService::loadKnowledgeDocs(int)
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "loadKnowledgeDocs error:" << reply->errorString();
+            qWarning() << "loadKnowledgeDocs error:" << reply->errorString();
             emit knowledgeDocsLoaded(QVariantList());
             return;
         }
         QByteArray responseData = reply->readAll();
         QJsonObject resp = QJsonDocument::fromJson(responseData).object();
-        qDebug() << "loadKnowledgeDocs response:" << responseData;
 
         // 兼容两种响应格式
         QJsonArray items;
@@ -917,7 +915,7 @@ void ApiService::registerLiveTalkingSession(int conversationId, const QString &s
     body["session_id"] = sessionId;
 
     m_networkManager->post(req, QJsonDocument(body).toJson());
-    qDebug() << "ApiService: 注册 LiveTalking session, conversation_id=" << conversationId << "session_id=" << sessionId;
+
 }
 
 // ==================== Settings (stubs) ====================
@@ -970,7 +968,7 @@ void ApiService::loadUsers(int page, int pageSize, const QString &search)
     connect(reply, &QNetworkReply::finished, this, [this, reply, page, pageSize]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "loadUsers error:" << reply->errorString();
+            qWarning() << "loadUsers error:" << reply->errorString();
             emit adminError("加载用户列表失败");
             return;
         }
@@ -1026,7 +1024,7 @@ void ApiService::createUser(const QString &username, const QString &password, co
         // 无论 HTTP 状态码如何，都读取响应体以提取错误详情
         QByteArray responseData = reply->readAll();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "createUser error:" << reply->errorString();
+            qWarning() << "createUser error:" << reply->errorString();
             // 尝试从 422 响应中提取验证错误详情
             QJsonObject resp = QJsonDocument::fromJson(responseData).object();
             if (resp.contains("detail") && resp["detail"].isArray()) {
@@ -1088,7 +1086,7 @@ void ApiService::updateUser(int userId, const QVariantMap &fields)
     connect(reply, &QNetworkReply::finished, this, [this, reply, userId]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "updateUser error:" << reply->errorString();
+            qWarning() << "updateUser error:" << reply->errorString();
             emit adminError("更新用户信息失败");
             return;
         }
@@ -1124,7 +1122,7 @@ void ApiService::deleteUser(int userId)
     connect(reply, &QNetworkReply::finished, this, [this, reply, userId]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "deleteUser error:" << reply->errorString();
+            qWarning() << "deleteUser error:" << reply->errorString();
             emit adminError("删除用户失败");
             return;
         }
@@ -1157,7 +1155,7 @@ void ApiService::toggleUserStatus(int userId, bool isActive)
     connect(reply, &QNetworkReply::finished, this, [this, reply, userId, isActive]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qDebug() << "toggleUserStatus error:" << reply->errorString();
+            qWarning() << "toggleUserStatus error:" << reply->errorString();
             emit adminError("修改用户状态失败");
             return;
         }

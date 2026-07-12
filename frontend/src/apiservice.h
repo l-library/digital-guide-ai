@@ -20,35 +20,33 @@ public:
     {
         QFile file("config.json");
         if (!file.open(QIODevice::ReadOnly)) {
-            qDebug() << "Fail to read config.json!";
+            qWarning() << "Fail to read config.json!";
             return "127.0.0.1"; // 默认值
         }
 
         QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
         QJsonObject obj = doc.object();
         QString IP = obj["backend"].toObject()["ip"].toString();
-        qDebug() << "Read ip:" << IP;
         return IP;
     }
     static int getBackendPort()
     {
         QFile file("config.json");
         if (!file.open(QIODevice::ReadOnly)) {
-            qDebug() << "Fail to read config.json!";
+            qWarning() << "Fail to read config.json!";
             return 8000;
         }
 
         QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
         QJsonObject obj = doc.object();
         int Port = obj["backend"].toObject()["port"].toInt();
-        qDebug() << "Read port:" << Port;
         return Port;
     }
     static QString getLiveTalkingHost()
     {
         QFile file("config.json");
         if (!file.open(QIODevice::ReadOnly)) {
-            qDebug() << "Fail to read config.json!";
+            qWarning() << "Fail to read config.json!";
             return "127.0.0.1";
         }
 
@@ -56,14 +54,13 @@ public:
         QJsonObject obj = doc.object();
         QString host = obj["livetalking"].toObject()["host"].toString();
         if (host.isEmpty()) host = "127.0.0.1";
-        qDebug() << "Read livetalking host:" << host;
         return host;
     }
     static int getLiveTalkingPort()
     {
         QFile file("config.json");
         if (!file.open(QIODevice::ReadOnly)) {
-            qDebug() << "Fail to read config.json!";
+            qWarning() << "Fail to read config.json!";
             return 8010;
         }
 
@@ -71,7 +68,6 @@ public:
         QJsonObject obj = doc.object();
         int port = obj["livetalking"].toObject()["port"].toInt();
         if (port == 0) port = 8010;
-        qDebug() << "Read livetalking port:" << port;
         return port;
     }
 };

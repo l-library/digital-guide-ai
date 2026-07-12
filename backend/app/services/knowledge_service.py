@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 from fastapi import UploadFile
@@ -8,6 +9,8 @@ import torch
 from langchain_text_splitters import MarkdownHeaderTextSplitter, RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+
+logger = logging.getLogger(__name__)
 
 # 自动定位项目路径，并规范化知识库存储目录
 CURRENT_DIR = os.path.abspath(__file__)
@@ -26,14 +29,14 @@ _embeddings = None
 def _get_embeddings() -> HuggingFaceEmbeddings:
     global _embeddings
     if _embeddings is None:
-        print("[Knowledge] 正在初始化 BGE Embedding 模型...")
+        logger.info("正在初始化 BGE Embedding 模型...")
         DEVICE = "cpu"
         _embeddings = HuggingFaceEmbeddings(
             model_name=MODEL_PATH,
             model_kwargs={'device': DEVICE},
             encode_kwargs={"normalize_embeddings": True},
         )
-        print(f"[Knowledge] Embedding 模型初始化成功，使用设备: {DEVICE}")
+        logger.info(f"Embedding 模型初始化成功，使用设备: {DEVICE}")
     return _embeddings
 
 async def save_uploaded_file(db: Session, file: UploadFile, title: str, user_id: int) -> KnowledgeDoc:
@@ -81,14 +84,14 @@ def process_document(db: Session, doc_id: int):
 
     try:
         # MarkItDown 解析
-        print(f"正在解析文档: {doc.file_path}")
+        logger.info(f"正在解析文档: {doc.file_path}")
         md = MarkItDown()
         result = md.convert(doc.file_path)
         raw_text = result.text_content
 
         # LangChain 文本切块
 
-        print("正在进行文本切块...")
+        logger.info("正在进行文本切块...")
         
         # 1. 结构感知切分：利用 MarkItDown 生成的 # 标题进行切割
         headers_to_split_on = [
@@ -111,10 +114,10 @@ def process_document(db: Session, doc_id: int):
             split.metadata["doc_id"] = str(doc_id)
             split.metadata["title"] = doc.title
 
-        print(f"切块完成，共产生 {len(splits)} 个文本块。")
+        logger.info(f"切块完成，共产生 {len(splits)} 个文本块。")
 
 
-        print("正在将知识存入 Chroma 向量数据库")
+        logger.info("正在将知识存入 Chroma 向量数据库")
         # 连接并实例化 Chroma 数据库
         vectorstore = Chroma(
             collection_name="lingshan_knowledge", 
@@ -128,10 +131,10 @@ def process_document(db: Session, doc_id: int):
         # 更新数据库真实状态
         doc.chunk_count = len(splits)
         doc.status = "ready" 
-        print("知识库处理成功，文件状态已更新为 ready。")
+        logger.info("知识库处理成功，文件状态已更新为 ready。")
 
     except Exception as e:
-        print(f" 处理失败: {e}")
+        logger.error(f"处理失败: {e}")
         doc.status = "failed"
 
     finally:
@@ -205,8 +208,8 @@ def sync_pre_ingested_docs(db: Session):
             created_count += 1
 
         db.commit()
-        print(f"[Startup] 预摄入文档同步完成，新增 {created_count} 条记录，共 {len(seen_sources)} 个文档")
+        logger.info(f"预摄入文档同步完成，新增 {created_count} 条记录，共 {len(seen_sources)} 个文档")
 
     except Exception as e:
-        print(f"[Startup] 预摄入文档同步失败: {e}")
+        logger.error(f"预摄入文档同步失败: {e}")
         db.rollback()

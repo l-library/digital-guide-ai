@@ -31,7 +31,7 @@ AudioPlayer::AudioPlayer(QObject *parent)
 
     QObject::connect(m_player, &QMediaPlayer::errorOccurred, this, [this](QMediaPlayer::Error error, const QString &errorString) {
         Q_UNUSED(error)
-        qDebug() << "AudioPlayer error:" << errorString;
+        qWarning() << "AudioPlayer error:" << errorString;
         setPlaying(false);
         setStatusText(QStringLiteral("播放失败"));
     });
@@ -62,7 +62,6 @@ void AudioPlayer::play(const QString &audioUrl)
         fullUrl = backendBase + audioUrl;
     }
 
-    qDebug() << "AudioPlayer: playing" << fullUrl;
     setStatusText(QStringLiteral("语音加载中..."));
     m_player->setSource(QUrl(fullUrl));
     m_player->play();

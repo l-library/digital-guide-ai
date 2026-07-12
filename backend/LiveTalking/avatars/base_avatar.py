@@ -300,7 +300,7 @@ class BaseAvatar:
         return stream
     
     def set_custom_state(self, audiotype, reinit=True):
-        print('set_custom_state:', audiotype)
+        logger.debug('set_custom_state: %s', audiotype)
         if self.custom_audio_index.get(audiotype) is None:
             return
         self.custom_audiotype = audiotype

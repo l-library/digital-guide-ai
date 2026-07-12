@@ -4,6 +4,8 @@ from openai import OpenAI, AsyncOpenAI
 from dotenv import load_dotenv
 
 load_dotenv()  # 读取.env文件，把里面的变量加载到环境变量里
+import logging
+logger = logging.getLogger(__name__)
 
 MODEL_NAME = os.getenv("LLM_MODEL_NAME")
 
@@ -92,11 +94,9 @@ async def generate_title_async(user_content: str, assistant_content: str) -> str
 
     # 兼容 DeepSeek 推理模型：reasoning_content 可能有值而 content 为空
     if not content:
-        print("content为空，输出reasoning_content")
         msg = response.choices[0].message
         content = getattr(msg, "reasoning_content", None)
 
-    print(f"[generate_title_async] content={content!r}")
     if not content:
         return "新对话"
     title = content.strip().strip('"').strip("'")

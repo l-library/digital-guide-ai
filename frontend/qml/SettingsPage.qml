@@ -325,6 +325,7 @@ Page {
             }
 
             GroupBox {
+                visible: loginManager.currentUser && loginManager.currentUser.role === "admin"
                 title: qsTr("知识库管理")
                 Layout.fillWidth: true
                 Material.elevation: 2
@@ -392,21 +393,6 @@ Page {
                 ColumnLayout {
                     width: parent.width
                     spacing: 0
-
-                    ItemDelegate {
-                        Layout.fillWidth: true
-                        visible: loginManager.currentUser && loginManager.currentUser.role === "admin"
-                        text: qsTr("数据大屏")
-                        icon.source: "qrc:/asset/data.png"
-                        font.pixelSize: 14
-                        onClicked: settingsManager.openDataDashboard()
-                    }
-
-                    Rectangle {
-                        Layout.fillWidth: true
-                        height: 1
-                        color: "#E0E0E0"
-                    }
 
                     ItemDelegate {
                         Layout.fillWidth: true

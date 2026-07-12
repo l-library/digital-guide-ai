@@ -1,5 +1,8 @@
 """管理员用户管理服务：用户 CRUD、级联删除、状态切换"""
+import logging
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 from sqlalchemy import or_, func
 from app.models import User, Conversation, Message
 from app.services.auth_service import hash_password
@@ -171,8 +174,8 @@ def _cleanup_user_vectors(user_id: int, conversation_ids: list[int]) -> None:
         for conv_id in conversation_ids:
             try:
                 vectorstore.delete(where={"conversation_id": str(conv_id)})
-                print(f"Chroma 向量已清理: user_id={user_id}, conversation_id={conv_id}")
+                logger.info(f"Chroma 向量已清理: user_id={user_id}, conversation_id={conv_id}")
             except Exception as e:
-                print(f"Chroma 向量清理失败: user_id={user_id}, conversation_id={conv_id}, 错误: {e}")
+                logger.error(f"Chroma 向量清理失败: user_id={user_id}, conversation_id={conv_id}, 错误: {e}")
     except Exception as e:
-        print(f"Chroma 连接/清理失败: user_id={user_id}, 错误: {e}")
+        logger.error(f"Chroma 连接/清理失败: user_id={user_id}, 错误: {e}")

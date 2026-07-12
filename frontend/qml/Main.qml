@@ -99,7 +99,8 @@ ApplicationWindow {
 
     function initAfterLogin() {
         var userId = loginManager.currentUser.id
-        conversationManager.startNewConversation(userId, "新对话")
+        // 先加载已有对话列表，仅当列表为空时才创建新对话，避免重复创建空对话
+        conversationManager.autoLoadOrCreateConversation(userId)
     }
 
     Connections {

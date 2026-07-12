@@ -1,5 +1,9 @@
 import json
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services.rag_service import retrieve_context
 from app.services.llm_service import generate_title_async
@@ -147,7 +151,7 @@ async def websocket_chat(ws: WebSocket):
                             }
                         )
                     except Exception as e:
-                        print(f"[标题生成失败] conversation_id={conversation_id}: {e}")
+                        logger.error(f"[标题生成失败] conversation_id={conversation_id}: {e}")
 
             except Exception as e:
                 db.rollback()

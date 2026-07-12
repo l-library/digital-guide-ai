@@ -1,7 +1,10 @@
 """认证服务：密码哈希、JWT 生成/验证、获取当前用户依赖、种子管理员初始化"""
+import logging
 import os
 from datetime import datetime, timedelta
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -153,7 +156,7 @@ def init_seed_user(db: Session) -> None:
             updated = True
         if updated:
             db.commit()
-            print("[auth] 种子管理员字段已修复（admin/admin123）")
+            logger.info("[auth] 种子管理员用户初始化完成")
         return
 
     admin_user = User(
@@ -165,4 +168,4 @@ def init_seed_user(db: Session) -> None:
     )
     db.add(admin_user)
     db.commit()
-    print("[auth] 种子管理员账号已创建（admin/admin123）")
+    logger.info("[auth] 种子管理员用户初始化完成")

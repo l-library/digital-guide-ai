@@ -4,6 +4,10 @@ import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 from app.services.digital_human_client import get_client
 from app.services.digital_human_session import (
     create_digital_human_session,
@@ -116,7 +120,7 @@ async def play_audio(req: PlayAudioRequest):
     from app.services.tts_streaming import send_audio_to_livetalking
     await send_audio_to_livetalking(req.conversation_id, req.audio_filename)
     elapsed = time.monotonic() - t0
-    print(f"[play-audio] conv={req.conversation_id} file={req.audio_filename} 总耗时={elapsed:.3f}s")
+    pass  # timing print intentionally removed
     return {"code": 200, "message": "ok"}
 
 
@@ -134,7 +138,7 @@ async def play_audio_queue(req: PlayAudioRequest):
     from app.services.tts_streaming import send_audio_to_livetalking_queued
     await send_audio_to_livetalking_queued(req.conversation_id, req.audio_filename)
     elapsed = time.monotonic() - t0
-    print(f"[play-audio-queue] conv={req.conversation_id} file={req.audio_filename} 总耗时={elapsed:.3f}s")
+    pass  # timing print intentionally removed
     return {"code": 200, "message": "ok"}
 
 
@@ -151,7 +155,7 @@ async def flush_audio_queue(req: FlushRequest):
     from app.services.tts_streaming import flush_livetalking_queue
     await flush_livetalking_queue(req.conversation_id)
     elapsed = time.monotonic() - t0
-    print(f"[flush] conv={req.conversation_id} 总耗时={elapsed:.3f}s")
+    pass  # timing print intentionally removed
     return {"code": 200, "message": "ok"}
 
 

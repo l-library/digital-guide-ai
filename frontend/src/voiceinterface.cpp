@@ -44,15 +44,11 @@ void VoiceInterface::setupRecording()
     m_recorder->setAudioChannelCount(1);
     m_recorder->setAudioSampleRate(16000);
 
-    qDebug() << "Voice: Setup complete. Audio input devices:" << QMediaDevices::audioInputs().size();
-
     QObject::connect(m_recorder, &QMediaRecorder::recorderStateChanged, this, [this](QMediaRecorder::RecorderState state) {
-        qDebug() << "Voice: Recorder state changed to:" << state << "(our state:" << m_state << ")";
         if (state == QMediaRecorder::StoppedState && m_state == Processing) {
             if (!m_outputPath.isEmpty()) {
                 QUrl url(m_outputPath);
                 QString localPath = url.toLocalFile();
-                qDebug() << "Voice: Recording saved to" << localPath;
                 emit voiceRecordingReady(localPath);
             } else {
                 setState(Idle);
@@ -62,7 +58,7 @@ void VoiceInterface::setupRecording()
 
     QObject::connect(m_recorder, &QMediaRecorder::errorOccurred, this, [this](QMediaRecorder::Error error, const QString &errorString) {
         Q_UNUSED(error)
-        qDebug() << "Voice: Recorder error:" << errorString;
+        qWarning() << "Voice: Recorder error:" << errorString;
         setState(Idle);
         emit errorOccurred(errorString);
     });
@@ -86,15 +82,12 @@ QString VoiceInterface::stateText() const
 
 void VoiceInterface::startRecording()
 {
-    qDebug() << "Voice: startRecording called, current state:" << m_state;
-
     if (m_state != Idle) {
-        qDebug() << "Voice: Not in Idle state, aborting";
         return;
     }
 
     if (!m_recorder) {
-        qDebug() << "Voice: Recorder not initialized";
+        qWarning() << "Voice: Recorder not initialized";
         emit errorOccurred(QStringLiteral("录音模块未初始化"));
         return;
     }
@@ -105,10 +98,8 @@ void VoiceInterface::startRecording()
     m_outputPath = QUrl::fromLocalFile(filePath).toString();
 
     m_recorder->setOutputLocation(QUrl(m_outputPath));
-    qDebug() << "Voice: Calling record(), output:" << m_outputPath;
     m_recorder->record();
 
-    qDebug() << "Voice: Recorder state after record():" << m_recorder->recorderState();
     setState(Recording);
 }
 

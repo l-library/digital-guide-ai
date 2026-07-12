@@ -1,6 +1,9 @@
+import logging
 import os
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
+
+logger = logging.getLogger(__name__)
 
 VECTOR_STORE_PATH = "vector_store/lingshan"
 
@@ -123,7 +126,7 @@ def retrieve_context(query: str, k: int = 3) -> list[str]:
             if content not in context_list:
                 context_list.append(content)
     except Exception as e:
-        print(f"[RAG] lingshan_knowledge 检索失败: {e}")
+        logger.error(f"lingshan_knowledge 检索失败: {e}")
 
     return context_list
 

@@ -822,7 +822,6 @@ Button {
 
                         onClicked: {
                             if (voiceInterface) {
-                                console.log("Voice button clicked, state:", voiceInterface.state)
                                 if (voiceInterface.state === 0) {
                                     voiceInterface.startRecording()
                                 } else if (voiceInterface.state === 1) {

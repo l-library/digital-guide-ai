@@ -16,6 +16,8 @@ from app.services.tts_service import synthesize_to_file
 from app.services.llm_service import generate_stream_async
 from app.services.digital_human_client import get_client as get_dh_client
 from app.services.digital_human_session import get_session_id
+import logging
+logger = logging.getLogger(__name__)
 
 TEMP_AUDIO_DIR = os.path.abspath(os.path.join("data", "temp_audios"))
 os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
@@ -75,7 +77,7 @@ def get_wav_duration(filepath: str) -> float:
         if info.duration > 0:
             return info.duration
     except Exception as e:
-        print(f"[TTS] soundfile 获取时长失败: {e}")
+        logger.error(f"[TTS] soundfile 获取时长失败: {e}")
 
     # 回退：根据文件大小估算（16-bit mono 22050Hz ≈ 44100 bytes/s）
     return os.path.getsize(filepath) / 44100.0
@@ -96,13 +98,8 @@ async def send_audio_to_livetalking(conversation_id: int, audio_filename: str):
         t_read = time.monotonic()
         await get_dh_client().send_audio(sessionid, audio_bytes)
         t_push = time.monotonic()
-        print(
-            f"[LiveTalking推送] conv={conversation_id} "
-            f"文件读取={t_read - t0:.3f}s LiveTalking POST={t_push - t_read:.3f}s "
-            f"总耗时={t_push - t0:.3f}s"
-        )
     except Exception as e:
-        print(f"[LiveTalking音频推送失败] conversation_id={conversation_id}: {e}")
+        logger.error(f"[LiveTalking音频推送失败] conversation_id={conversation_id}: {e}")
 
 
 async def send_audio_to_livetalking_queued(conversation_id: int, audio_filename: str):
@@ -123,13 +120,8 @@ async def send_audio_to_livetalking_queued(conversation_id: int, audio_filename:
         t_read = time.monotonic()
         await get_dh_client().send_audio_queued(sessionid, audio_bytes)
         t_push = time.monotonic()
-        print(
-            f"[LiveTalking预推送队列] conv={conversation_id} "
-            f"文件读取={t_read - t0:.3f}s LiveTalking POST={t_push - t_read:.3f}s "
-            f"总耗时={t_push - t0:.3f}s"
-        )
     except Exception as e:
-        print(f"[LiveTalking预推送队列失败] conversation_id={conversation_id}: {e}")
+        logger.error(f"[LiveTalking预推送队列失败] conversation_id={conversation_id}: {e}")
 
 
 async def flush_livetalking_queue(conversation_id: int):
@@ -140,7 +132,7 @@ async def flush_livetalking_queue(conversation_id: int):
     try:
         await get_dh_client().flush_audio_queue(sessionid)
     except Exception as e:
-        print(f"[flush-livetalking] conv={conversation_id} 失败: {e}")
+        logger.error(f"[flush-livetalking] conv={conversation_id} 失败: {e}")
 
 
 
@@ -163,7 +155,7 @@ async def synthesize_and_resolve(
         if wav_list is not None and idx is not None:
             wav_list[idx] = audio_filename
     except Exception as e:
-        print(f"[逐句TTS合成失败]: {e}")
+        logger.error(f"[逐句TTS合成失败]: {e}")
         future.set_result(None)
 
 
@@ -220,7 +212,7 @@ async def create_streaming_pipeline(
                 "duration": round(duration, 2),
             }
         except Exception as e:
-            print(f"[逐句TTS合成失败] idx={task_idx}: {e}")
+            logger.error(f"[逐句TTS合成失败] idx={task_idx}: {e}")
             tts_results[task_idx] = None
 
     def _drain_completed() -> list[dict]:
@@ -274,11 +266,6 @@ async def create_streaming_pipeline(
             # 前端无需等待 LLM 全部生成完即可开始播放
             if response_type == 1:
                 for event in _drain_completed():
-                    elapsed = time.monotonic() - pipeline_start
-                    print(
-                        f"[TTS流式] 句{event['index']}音频已交付，"
-                        f"耗时 {elapsed:.2f}s（pipeline 启动至今）"
-                    )
                     yield event
 
         # 处理缓冲区中剩余文本
@@ -304,11 +291,6 @@ async def create_streaming_pipeline(
                     pending, return_when=asyncio.FIRST_COMPLETED
                 )
                 for event in _drain_completed():
-                    elapsed = time.monotonic() - pipeline_start
-                    print(
-                        f"[TTS流式] 句{event['index']}音频已交付（LLM结束后），"
-                        f"耗时 {elapsed:.2f}s"
-                    )
                     yield event
 
     except Exception as e:
@@ -359,13 +341,13 @@ def concat_wav_files(wav_paths: list[str], output_dir: str) -> str | None:
         if result.returncode == 0:
             return output_filename
         else:
-            print(f"[concat_wav_files] ffmpeg 拼接失败: {result.stderr}")
+            logger.error(f"[concat_wav_files] ffmpeg 拼接失败: {result.stderr}")
             return None
     except FileNotFoundError:
-        print("[concat_wav_files] ffmpeg 未找到，无法拼接 WAV")
+        logger.error("[concat_wav_files] ffmpeg 未找到，无法拼接 WAV")
         return None
     except Exception as e:
-        print(f"[concat_wav_files] 异常: {e}")
+        logger.error(f"[concat_wav_files] 异常: {e}")
         return None
     finally:
         if os.path.exists(filelist_path):

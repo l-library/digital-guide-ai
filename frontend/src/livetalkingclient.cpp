@@ -5,7 +5,10 @@
 #include <QJsonObject>
 #include <QUrl>
 #include <QDebug>
+#include <QLoggingCategory>
 #include <QMutexLocker>
+
+Q_LOGGING_CATEGORY(lcLiveTalking, "livetalking.connection")
 #include <QRegularExpression>
 #include <QDateTime>
 
@@ -126,7 +129,7 @@ void LiveTalkingClient::connectToServer(const QString &host, int port)
     QString cleanHost = host;
     cleanHost.remove(QRegularExpression("^https?://"));
     QUrl url(QString("ws://%1:%2/ws_stream").arg(cleanHost).arg(port));
-    qDebug() << "LiveTalking: connecting to" << url.toString();
+    qCDebug(lcLiveTalking) << "LiveTalking: connecting to" << url.toString();
     m_webSocket->open(url);
 }
 
@@ -179,7 +182,7 @@ void LiveTalkingClient::interrupt()
 
 void LiveTalkingClient::onConnected()
 {
-    qDebug() << "LiveTalking: WebSocket connected, sending create session...";
+    qCDebug(lcLiveTalking) << "LiveTalking: WebSocket connected, sending create session...";
     m_connected = true;
     emit connectedChanged();
     createSession();
@@ -187,7 +190,7 @@ void LiveTalkingClient::onConnected()
 
 void LiveTalkingClient::onDisconnected()
 {
-    qDebug() << "LiveTalking: WebSocket disconnected";
+    qCDebug(lcLiveTalking) << "LiveTalking: WebSocket disconnected";
     m_connected = false;
     m_speaking = false;
     m_videoFrameBuffer.clear();
@@ -233,7 +236,7 @@ void LiveTalkingClient::onTextMessageReceived(const QString &message)
 
     if (type == "created") {
         m_sessionId = obj["sessionid"].toString();
-        qDebug() << "LiveTalking: session created:" << m_sessionId;
+        qCDebug(lcLiveTalking) << "LiveTalking: session created:" << m_sessionId;
         emit sessionChanged();
         emit sessionCreated(m_sessionId);
         if (m_conversationId > 0 && !m_sessionId.isEmpty()) {
@@ -241,16 +244,13 @@ void LiveTalkingClient::onTextMessageReceived(const QString &message)
         }
     } else if (type == "bound") {
         m_sessionId = obj["sessionid"].toString();
-        qDebug() << "LiveTalking: session bound:" << m_sessionId;
         emit sessionChanged();
         emit sessionCreated(m_sessionId);
         if (m_conversationId > 0 && !m_sessionId.isEmpty()) {
             ApiService::instance().registerLiveTalkingSession(m_conversationId, m_sessionId);
         }
     } else if (type == "text_ack") {
-        qDebug() << "LiveTalking: text acknowledged";
     } else if (type == "interrupt_ack") {
-        qDebug() << "LiveTalking: interrupt acknowledged";
     } else if (type == "error") {
         QString errMsg = obj["message"].toString();
         qWarning() << "LiveTalking: error:" << errMsg;
@@ -333,8 +333,6 @@ void LiveTalkingClient::processAudioFrame(const QByteArray &payload)
     if (eventpointCode == 1) {
         if (!m_speaking) {
             m_speaking = true;
-            qDebug() << "[间隔测算] eventpoint==1（句子开始）"
-                     << QDateTime::currentMSecsSinceEpoch() << "ms";
             // 清空旧句的视频缓冲，但保留 m_currentFrame 不动——
             // 过渡期间 QML 继续显示上一句最后一帧，新句视频帧到达后
             // 在下一个显示周期（≤40ms）内接上，音画不同步极小。
@@ -345,8 +343,6 @@ void LiveTalkingClient::processAudioFrame(const QByteArray &payload)
     } else if (eventpointCode == 2) {
         if (m_speaking) {
             m_speaking = false;
-            qDebug() << "[间隔测算] eventpoint==2（句子结束）"
-                     << QDateTime::currentMSecsSinceEpoch() << "ms";
             emit speakingChanged();
             // 当前句播完，通知 ConversationManager 推进下一句
             emit speakingFinished();

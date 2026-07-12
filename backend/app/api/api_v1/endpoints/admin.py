@@ -1,5 +1,8 @@
+import logging
 import os
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import (
     APIRouter,
@@ -151,9 +154,9 @@ def delete_knowledge_doc(
     if os.path.exists(doc.file_path):
         try:
             os.remove(doc.file_path)
-            print(f"物理文件已删除: {doc.file_path}")
+            logger.info(f"物理文件已删除: {doc.file_path}")
         except Exception as e:
-            print(f"物理文件删除失败，可能被占用: {e}")
+            logger.error(f"物理文件删除失败，可能被占用: {e}")
 
     # 3. 清理 ChromaDB 向量库中的相应记忆
     if doc.status == "ready":
@@ -165,9 +168,9 @@ def delete_knowledge_doc(
                 embedding_function=embeddings,
             )
             vectorstore.delete(where={"doc_id": str(doc_id)})
-            print(f"向量库(lingshan_knowledge)中 doc_id={doc_id} 的记忆已删除")
+            logger.info(f"向量库(lingshan_knowledge)中 doc_id={doc_id} 的记忆已删除")
         except Exception as e:
-            print(f"向量库(lingshan_knowledge)清理失败: {e}")
+            logger.error(f"向量库(lingshan_knowledge)清理失败: {e}")
 
         # 同时清理预摄入文档（guide_parents / guide_children 集合，按 source 匹配）
         for collection_name in ("guide_children", "guide_parents"):
@@ -178,9 +181,9 @@ def delete_knowledge_doc(
                     embedding_function=embeddings,
                 )
                 store.delete(where={"source": doc.title})
-                print(f"向量库({collection_name})中 source='{doc.title}' 的记忆已删除")
+                logger.info(f"向量库({collection_name})中 source='{doc.title}' 的记忆已删除")
             except Exception as e:
-                print(f"向量库({collection_name})清理失败: {e}")
+                logger.error(f"向量库({collection_name})清理失败: {e}")
 
     # 4. 最后，清理关系型数据库记录
     db.delete(doc)

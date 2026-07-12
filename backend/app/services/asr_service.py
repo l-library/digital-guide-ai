@@ -1,12 +1,16 @@
+import logging
+
 import whisper
 import torch
 import warnings
 import os
 
+logger = logging.getLogger(__name__)
+
 warnings.filterwarnings("ignore")
 
 _device = "cpu"
-print(f"[ASR] 语音模块将使用设备: {_device}")
+logger.info(f"语音模块将使用设备: {_device}")
 
 # 模型路径：backend/models
 _current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,9 +23,9 @@ def _get_model():
     """懒加载 Whisper 模型，避免模块导入时阻塞"""
     global _model
     if _model is None:
-        print("[ASR] 正在加载 Whisper Base 模型，首次加载可能需要较长时间...")
+        logger.info("正在加载 Whisper Base 模型，首次加载可能需要较长时间...")
         _model = whisper.load_model("base", device=_device, download_root=_models_dir)
-        print("[ASR] Whisper 模型加载完成")
+        logger.info("Whisper 模型加载完成")
     return _model
 
 
