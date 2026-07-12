@@ -29,7 +29,7 @@ def split_sentences(text: str) -> list[str]:
 
     分句策略（最小长度混合分句）：
     - 句末标点（。！？\n）：总是分句，无论句子长度
-    - 逗分标点（，；）：仅当当前累积片段 > 8 字时才分句
+    - 逗分标点（，；）：仅当当前累积片段 > 30 字时才分句
 
     这样短句（如"您好，欢迎来到祥符禅寺景区"）保持完整，
     避免 0.3s 的微型音频碎片（LiveTalking 每个文件有 ~0.7s 固定开销）；
@@ -38,7 +38,7 @@ def split_sentences(text: str) -> list[str]:
     """
     SENTENCE_END = set("。！？\n")
     COMMA = set("，；")
-    MIN_LENGTH = 15
+    MIN_LENGTH = 3000
 
     fragments: list[str] = []
     current = ""
@@ -246,7 +246,9 @@ async def create_streaming_pipeline(
                 "content": token,
             }
 
-            if sentence_buffer and sentence_buffer[-1] in "。！？\n，；":
+            # 只在硬句末标点处立即分句，逗号/分号留给 split_sentences
+            # 在缓冲区完整后按 MIN_LENGTH 规则统一处理，避免流式 token 截断导致短句被错误拆分
+            if sentence_buffer and sentence_buffer[-1] in "。！？\n":
                 sentences = split_sentences(sentence_buffer)
                 for s in sentences:
                     yield {

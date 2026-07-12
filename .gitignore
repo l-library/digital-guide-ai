@@ -71,3 +71,7 @@ frontend/build/
 
 # 临时导出的项目结构
 /project_structure.txt
+
+# 文档
+*.docx
+*.xlsx
