@@ -77,6 +77,67 @@ Page {
                     }
                 }
             }
+
+            // 数字人/文字输出 模式切换（融入 header）
+            Row {
+                spacing: 0
+
+                Rectangle {
+                    id: dhPill
+                    width: dhPillLabel.implicitWidth + 18
+                    height: 28
+                    radius: 14
+                    color: root.outputMode === "digitHuman" ? "#FFFFFF" : "transparent"
+                    border.color: "#99FFFFFF"
+                    border.width: root.outputMode === "digitHuman" ? 0 : 1
+
+                    Behavior on color { ColorAnimation { duration: 200 } }
+
+                    Label {
+                        id: dhPillLabel
+                        anchors.centerIn: parent
+                        text: qsTr("数字人")
+                        font.pixelSize: 12
+                        font.weight: root.outputMode === "digitHuman" ? Font.Medium : Font.Normal
+                        color: root.outputMode === "digitHuman" ? "#1976D2" : "#CCE5FF"
+
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: root.outputMode = "digitHuman"
+                    }
+                }
+
+                Rectangle {
+                    id: textPill
+                    width: textPillLabel.implicitWidth + 18
+                    height: 28
+                    radius: 14
+                    color: root.outputMode === "text" ? "#FFFFFF" : "transparent"
+                    border.color: "#99FFFFFF"
+                    border.width: root.outputMode === "text" ? 0 : 1
+
+                    Behavior on color { ColorAnimation { duration: 200 } }
+
+                    Label {
+                        id: textPillLabel
+                        anchors.centerIn: parent
+                        text: qsTr("文字")
+                        font.pixelSize: 12
+                        font.weight: root.outputMode === "text" ? Font.Medium : Font.Normal
+                        color: root.outputMode === "text" ? "#1976D2" : "#CCE5FF"
+
+                        Behavior on color { ColorAnimation { duration: 150 } }
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: root.outputMode = "text"
+                    }
+                }
+            }
         }
     }
 
@@ -481,81 +542,6 @@ Page {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         spacing: 0
-
-        // 分段控件：数字人 / 文字输出 模式切换
-        Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 48
-            Layout.topMargin: 8
-            Layout.bottomMargin: 4
-
-            Row {
-                anchors.centerIn: parent
-                spacing: 8
-
-                // "数字人" 段
-                Rectangle {
-                    id: digitHumanBtn
-                    width: digitHumanLabel.implicitWidth + 32
-                    height: 36
-                    radius: 18
-                    color: root.outputMode === "digitHuman" ? "#1976D2" : "transparent"
-
-                    Behavior on color {
-                        ColorAnimation { duration: 300; easing.type: Easing.InOutCubic }
-                    }
-
-                    Label {
-                        id: digitHumanLabel
-                        anchors.centerIn: parent
-                        text: qsTr("数字人")
-                        font.pixelSize: 13
-                        font.weight: root.outputMode === "digitHuman" ? Font.Medium : Font.Normal
-                        color: root.outputMode === "digitHuman" ? "white" : "#666666"
-
-                        Behavior on color {
-                            ColorAnimation { duration: 200 }
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: root.outputMode = "digitHuman"
-                    }
-                }
-
-                // "文字输出" 段
-                Rectangle {
-                    id: textOutputBtn
-                    width: textLabel.implicitWidth + 32
-                    height: 36
-                    radius: 18
-                    color: root.outputMode === "text" ? "#1976D2" : "transparent"
-
-                    Behavior on color {
-                        ColorAnimation { duration: 300; easing.type: Easing.InOutCubic }
-                    }
-
-                    Label {
-                        id: textLabel
-                        anchors.centerIn: parent
-                        text: qsTr("文字输出")
-                        font.pixelSize: 13
-                        font.weight: root.outputMode === "text" ? Font.Medium : Font.Normal
-                        color: root.outputMode === "text" ? "white" : "#666666"
-
-                        Behavior on color {
-                            ColorAnimation { duration: 200 }
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: root.outputMode = "text"
-                    }
-                }
-            }
-        }
 
         // 内容区容器：消息列表 / 数字人 交叉淡入淡出
         Item {
