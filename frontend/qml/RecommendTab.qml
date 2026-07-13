@@ -213,19 +213,22 @@ Item {
                     // 推荐理由
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 36
+                        Layout.preferredHeight: Math.max(reasonLabel.implicitHeight, reasonLabel.paintedHeight) + 16
                         radius: 6
                         color: "#E3F2FD"
 
                         Label {
-                            anchors.fill: parent
+                            id: reasonLabel
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.top: parent.top
                             anchors.margins: 8
                             text: recommendManager && recommendManager.route.match_reason
                                   ? qsTr("推荐理由：%1").arg(recommendManager.route.match_reason)
                                   : ""
                             font.pixelSize: 12
                             color: "#1565C0"
-                            elide: Text.ElideRight
+                            wrapMode: Text.WordWrap
                         }
                     }
                 }

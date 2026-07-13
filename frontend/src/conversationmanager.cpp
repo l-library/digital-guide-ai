@@ -254,6 +254,16 @@ void ConversationManager::loadConversation(int conversationId)
     m_pendingMessages.clear();
     clearAudioQueue();
     m_currentConversationId = conversationId;
+    // 切换对话时同步更新标题：从已加载的对话列表中查找匹配项的 title，
+    // 否则状态栏会停留在上一个对话的标题，直到后端回报 titleAutoUpdated。
+    m_currentTitle.clear();
+    for (const auto &v : m_conversations) {
+        const QVariantMap cm = v.toMap();
+        if (cm.value(QStringLiteral("id")).toInt() == conversationId) {
+            m_currentTitle = cm.value(QStringLiteral("title")).toString();
+            break;
+        }
+    }
     m_messages.clear();
     m_currentAudioUrl.clear();
     m_ttsPending = false;
