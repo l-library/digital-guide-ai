@@ -35,18 +35,27 @@ def _get_async_client() -> AsyncOpenAI:
     return _async_client
 
 
-def generate(prompt: str) -> str:
+def generate(prompt: str, timeout: float = 60, max_tokens: int = 1000) -> str:
     """
     接收完整prompt，返回LLM的回答文本。
     rag_service.py 构建好prompt后调用这个函数。
+    timeout 参数控制请求超时时间（秒），默认 60 秒。
+    max_tokens 参数控制最大生成 token 数，默认 1000。
+    注意：DeepSeek 推理模型的 reasoning_content 也消耗 max_tokens 配额，
+    生成复杂 JSON 时需传更大的值（如 4000）避免截断。
     """
     response = _get_client().chat.completions.create(
         model=MODEL_NAME,
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
-        max_tokens=1000,
+        max_tokens=max_tokens,
+        timeout=timeout,
     )
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+    # DeepSeek 推理模型偶尔 content 为空，回退到 reasoning_content
+    if not content:
+        content = getattr(response.choices[0].message, "reasoning_content", None) or ""
+    return content
 
 
 async def generate_stream_async(messages: list[dict]):

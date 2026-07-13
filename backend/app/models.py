@@ -38,7 +38,7 @@ class Message(Base):
     role = Column(String(16), nullable=False)  # "user" 或 "assistant"
     content = Column(Text, nullable=False)
     audio_url = Column(String(512), nullable=True)
-    knowledge_sources = Column(JSON, nullable=True)  # JSON数组，如 ["故宫介绍.docx"]
+    knowledge_sources = Column(JSON, nullable=True)  # JSON数组，如 ["灵山胜境导游词.docx"]
     created_at = Column(DateTime, default=datetime.utcnow)
 
     def to_dict(self):

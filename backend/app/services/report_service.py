@@ -142,7 +142,7 @@ def analyze_emotion(db, start_date: str, end_date: str) -> dict:
         from app.config.prompt_loader import get_emotion_summary_prompt
         prompt = get_emotion_summary_prompt(questions_text)
         try:
-            summary = generate(prompt).strip()
+            summary = generate(prompt, timeout=20).strip()
         except Exception:
             summary = "情感摘要生成失败，请稍后重试"
 
@@ -335,8 +335,7 @@ def generate_suggestions(db, start_date: str, end_date: str) -> dict:
     prompt = get_service_suggestions_prompt(questions_text)
 
     try:
-        raw = generate(prompt).strip()
-        # 清理可能的 markdown 代码块标记
+        raw = generate(prompt, timeout=20, max_tokens=4000).strip()
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
         raw = re.sub(r"\s*```$", "", raw)
         suggestions = json.loads(raw)

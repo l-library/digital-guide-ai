@@ -3,14 +3,17 @@
 提供兴趣推理和路线推荐功能。
 """
 import json
+import logging
 import re
 from datetime import datetime, timedelta
 
 from app.models import User, Conversation, Message, RecommendLog
+
+logger = logging.getLogger(__name__)
 from app.services import llm_service, rag_service
 from app.services import report_service
 
-_SCENIC_SPOT_NAME = "故宫"  # TODO: make configurable
+_SCENIC_SPOT_NAME = "灵山胜境"  # TODO: make configurable
 
 # 6 个已知的关注类别，用于兴趣推理 prompt
 _KNOWN_CATEGORIES = [
@@ -79,6 +82,7 @@ def infer_interests(user_id: int, db) -> list[str]:
     # ---- 调用 LLM 并解析 ----
     parsed = _call_llm_and_parse_json(prompt)
     if not parsed:
+        logger.warning(f"用户 {user_id} 兴趣推断失败，使用冷启动")
         # 解析失败，保留旧兴趣（如果有的话），不覆盖
         if user.interests:
             try:
@@ -142,11 +146,29 @@ def recommend_route(user_id: int, db) -> dict:
     context_text = "\n\n---\n\n".join(context_list)
     interests_text = "、".join(interests)
 
+    # 读取预设路线模板，作为 LLM 规划的参考骨架
+    route_templates = ""
+    try:
+        from app.config.paths import ROUTE_TEMPLATES_PATH
+        with open(ROUTE_TEMPLATES_PATH, "r", encoding="utf-8") as f:
+            route_templates = f.read().strip()
+    except Exception:
+        logger.warning("预设路线模板文件读取失败，将仅使用 RAG 上下文")
+
     prompt = (
         f"你是一个景区导览系统的路线规划助手。请根据以下信息为游客生成一条个性化游览路线。\n\n"
         f"景区名称：{_SCENIC_SPOT_NAME}\n"
         f"游客兴趣标签：{interests_text}\n\n"
         f"参考资料：\n{context_text}\n\n"
+    )
+
+    if route_templates:
+        prompt += (
+            f"预设路线模板（请以此为基础骨架，根据游客兴趣选择最匹配的路线并做个性化调整）：\n"
+            f"{route_templates}\n\n"
+        )
+
+    prompt += (
         f"请返回一个 JSON 对象（不要包含任何其他内容），格式如下：\n"
         f'{{"name": "路线名称", "duration_minutes": 120, '
         f'"spots": [{{"name": "景点名", "description": "简介", "estimated_minutes": 30}}], '
@@ -160,9 +182,10 @@ def recommend_route(user_id: int, db) -> dict:
 
     # ---- 调用 LLM ----
     try:
-        raw = llm_service.generate(prompt)
+        raw = llm_service.generate(prompt, timeout=20, max_tokens=4000)
         parsed = _parse_json(raw)
-    except Exception:
+    except Exception as e:
+        logger.error(f"推荐路线生成失败: {e}")
         return {"error": "推荐服务暂不可用"}
 
     if parsed and isinstance(parsed, dict):
@@ -190,20 +213,31 @@ def recommend_route(user_id: int, db) -> dict:
 def _parse_json(raw: str):
     """
     解析 LLM 返回的 JSON 字符串，处理常见的格式问题。
-    尝试 2 次：第一次直接解析，第二次去掉 markdown 代码块后重试。
+    依次尝试：直接解析 → 去掉 markdown 代码块 → 从文本中提取 JSON。
     """
-    attempts = [
-        raw.strip(),
-        re.sub(r"^```(?:json)?\s*\n?", "", raw.strip()),
-    ]
+    if not raw or not raw.strip():
+        return None
 
-    for i, text in enumerate(attempts):
-        text = re.sub(r"\n?\s*```$", "", text)
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            if i == 0:
-                continue  # 第一次失败，尝试清理后重试
+    text = raw.strip()
+
+    # 尝试1：去掉 markdown 代码块后直接解析
+    cleaned = re.sub(r"^```(?:json)?\s*\n?", "", text)
+    cleaned = re.sub(r"\n?\s*```$", "", cleaned).strip()
+    try:
+        return json.loads(cleaned)
+    except json.JSONDecodeError:
+        pass
+
+    # 尝试2：从文本中提取第一个完整的 JSON 对象或数组
+    # 匹配 {...} 或 [...]
+    for pattern in [r'\{.*\}', r'\[.*\]']:
+        match = re.search(pattern, text, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+
     return None
 
 
@@ -211,7 +245,7 @@ def _call_llm_and_parse_json(prompt: str):
     """调用 LLM 并解析为 JSON，失败时重试一次。"""
     for attempt in range(2):
         try:
-            raw = llm_service.generate(prompt)
+            raw = llm_service.generate(prompt, timeout=20, max_tokens=4000)
             result = _parse_json(raw)
             if result is not None:
                 return result

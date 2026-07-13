@@ -16,6 +16,10 @@ Item {
             start.toISOString().slice(0, 10),
             end.toISOString().slice(0, 10)
         )
+        // 自动加载数据，无需用户手动点击查询
+        if (reportManager) {
+            reportManager.loadAll()
+        }
     }
 
     ScrollView {

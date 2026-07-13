@@ -18,6 +18,13 @@ Item {
         }
     }
 
+    Component.onCompleted: {
+        if (recommendManager && loginManager && loginManager.currentUser) {
+            dataLoaded = true
+            recommendManager.loadRecommend(loginManager.currentUser.id)
+        }
+    }
+
     ScrollView {
         anchors.fill: parent
         contentWidth: availableWidth
@@ -59,12 +66,26 @@ Item {
 
             // ── 错误状态 ─────────────────────────
             Label {
+                id: errorLabel
                 Layout.fillWidth: true
                 text: qsTr("推荐服务暂不可用，请稍后再试")
                 font.pixelSize: 14
                 color: "#F44336"
                 horizontalAlignment: Text.AlignHCenter
-                visible: false // TBD: 等 recommendManager.recommendError 属性就绪后绑定
+                visible: false
+            }
+
+            Connections {
+                target: recommendManager
+                function onRecommendError(error) {
+                    errorLabel.text = qsTr("推荐加载失败：") + error
+                    errorLabel.visible = true
+                }
+                function onRouteChanged() {
+                    if (recommendManager.route && Object.keys(recommendManager.route).length > 0) {
+                        errorLabel.visible = false
+                    }
+                }
             }
 
             // ── 空状态 ───────────────────────────

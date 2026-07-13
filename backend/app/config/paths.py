@@ -27,6 +27,10 @@ BGE_MODEL_DIR = os.path.join(MODELS_DIR, "bge-small-zh-v1.5")
 LINGSHAN_STORE_DIR = os.path.join(VECTOR_STORE_DIR, "lingshan")
 ENTERPRISE_KB_DIR = os.path.join(VECTOR_STORE_DIR, "enterprise_kb")
 
+# 配置文件
+CONFIG_DIR = os.path.dirname(os.path.abspath(__file__))
+ROUTE_TEMPLATES_PATH = os.path.join(CONFIG_DIR, "path.txt")
+
 # 确保关键运行时目录存在
 os.makedirs(TEMP_AUDIO_DIR, exist_ok=True)
 os.makedirs(KNOWLEDGE_DOCS_DIR, exist_ok=True)

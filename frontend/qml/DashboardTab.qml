@@ -16,6 +16,14 @@ Item {
         }
     }
 
+    Component.onCompleted: {
+        if (dashboardManager) {
+            dataLoaded = true
+            dashboardManager.loadAll()
+            refreshTimer.start()
+        }
+    }
+
     // Auto-refresh every 30 seconds
     Timer {
         id: refreshTimer
@@ -42,7 +50,7 @@ Item {
             BusyIndicator {
                 Layout.alignment: Qt.AlignHCenter
                 running: dashboardManager && dashboardManager.isLoading
-                visible: dashboardManager && dashboardManager.isLoading && !root.dataLoaded
+                visible: dashboardManager && dashboardManager.isLoading
             }
 
             // ── Section: Metric Cards ──────────────────
@@ -60,34 +68,34 @@ Item {
                 // Card 1: Today Services
                 DashboardCard {
                     title: qsTr("今日服务人次")
-                    value: dashboardManager.overview ? dashboardManager.overview.todayServiceCount || 0 : 0
+                    value: dashboardManager.overview ? dashboardManager.overview.today_service_count || 0 : 0
                     accentColor: "#1976D2"
                 }
                 // Card 2: Today Visitors
                 DashboardCard {
                     title: qsTr("今日访客数")
-                    value: dashboardManager.overview ? dashboardManager.overview.todayVisitorCount || 0 : 0
+                    value: dashboardManager.overview ? dashboardManager.overview.today_visitor_count || 0 : 0
                     accentColor: "#388E3C"
                 }
                 // Card 3: Week Services
                 DashboardCard {
                     title: qsTr("本周服务人次")
-                    value: dashboardManager.overview ? dashboardManager.overview.weekServiceCount || 0 : 0
+                    value: dashboardManager.overview ? dashboardManager.overview.week_service_count || 0 : 0
                     accentColor: "#F57C00"
                 }
                 // Card 4: Avg Satisfaction
                 DashboardCard {
                     title: qsTr("平均满意度")
-                    value: dashboardManager.overview ? (dashboardManager.overview.avgSatisfaction || 0) : 0
+                    value: dashboardManager.overview ? (dashboardManager.overview.avg_satisfaction || 0) : 0
                     accentColor: "#7B1FA2"
                     isFloat: true
                     suffix: "%"
-                    floatValue: dashboardManager.overview ? Math.round((dashboardManager.overview.avgSatisfaction || 0) * 100) : 0
+                    floatValue: dashboardManager.overview ? Math.round((dashboardManager.overview.avg_satisfaction || 0) / 5 * 100) : 0
                 }
                 // Card 5: Recommend Count
                 DashboardCard {
                     title: qsTr("推荐次数")
-                    value: dashboardManager.overview ? (dashboardManager.overview.recommendCount || 0) : 0
+                    value: dashboardManager.overview ? (dashboardManager.overview.recommend_count || 0) : 0
                     accentColor: "#E91E63"
                 }
             }
@@ -354,7 +362,7 @@ Item {
                         ctx.lineWidth = 2;
                         ctx.beginPath();
                         for (var i = 0; i < trend.length; i++) {
-                            var score = trend[i].avgScore || 0;
+                            var score = trend[i].avg_score || 0;
                             var x = padding.left + i * xStep;
                             var y = h - padding.bottom - ((score - minScore) / (maxScore - minScore) * plotH);
                             if (i === 0) ctx.moveTo(x, y);
@@ -366,7 +374,7 @@ Item {
                         ctx.fillStyle = "#7B1FA2";
                         for (var i2 = 0; i2 < trend.length; i2++) {
                             var x = padding.left + i2 * xStep;
-                            var y = h - padding.bottom - ((trend[i2].avgScore || 0) / (maxScore - minScore) * plotH);
+                            var y = h - padding.bottom - ((trend[i2].avg_score || 0) / (maxScore - minScore) * plotH);
                             ctx.beginPath();
                             ctx.arc(x, y, 3, 0, Math.PI * 2);
                             ctx.fill();
@@ -375,14 +383,14 @@ Item {
                         // Draw response count bars (thin bars at bottom)
                         var maxResp = 1;
                         for (var j = 0; j < trend.length; j++) {
-                            maxResp = Math.max(maxResp, trend[j].responseCount || 0);
+                            maxResp = Math.max(maxResp, trend[j].response_count || 0);
                         }
                         var barMaxH = 30;
                         ctx.fillStyle = "rgba(123, 31, 162, 0.15)";
                         for (var k = 0; k < trend.length; k++) {
                             var bx = padding.left + k * xStep - xStep / 4;
                             var bw = Math.max(2, xStep / 2);
-                            var bh = ((trend[k].responseCount || 0) / maxResp) * barMaxH;
+                            var bh = ((trend[k].response_count || 0) / maxResp) * barMaxH;
                             var by = h - padding.bottom - bh;
                             ctx.fillRect(bx, by, bw, bh);
                         }

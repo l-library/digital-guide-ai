@@ -1175,7 +1175,7 @@ void ApiService::loadDashboardOverview()
 {
     QUrl url(BASE_URL + "/api/v1/admin/dashboard/overview");
     QNetworkRequest req(url);
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(30000);
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
@@ -1203,7 +1203,7 @@ void ApiService::loadServiceStats(const QString &period)
     url.setQuery(query);
 
     QNetworkRequest req(url);
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(30000);
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
@@ -1216,7 +1216,7 @@ void ApiService::loadServiceStats(const QString &period)
         }
         QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
         if (resp["code"].toInt() == 200) {
-            QJsonArray arr = resp["data"].toArray();
+            QJsonArray arr = resp["data"].toObject()["stats"].toArray();
             QVariantList stats;
             for (const QJsonValue &val : arr) {
                 stats.append(val.toVariant());
@@ -1236,7 +1236,7 @@ void ApiService::loadHotQuestions(int top)
     url.setQuery(query);
 
     QNetworkRequest req(url);
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(30000);
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
@@ -1249,7 +1249,7 @@ void ApiService::loadHotQuestions(int top)
         }
         QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
         if (resp["code"].toInt() == 200) {
-            QJsonArray arr = resp["data"].toArray();
+            QJsonArray arr = resp["data"].toObject()["items"].toArray();
             QVariantList items;
             for (const QJsonValue &val : arr) {
                 items.append(val.toVariant());
@@ -1269,7 +1269,7 @@ void ApiService::loadSatisfactionTrend(const QString &period)
     url.setQuery(query);
 
     QNetworkRequest req(url);
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(30000);
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
@@ -1282,7 +1282,7 @@ void ApiService::loadSatisfactionTrend(const QString &period)
         }
         QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
         if (resp["code"].toInt() == 200) {
-            QJsonArray arr = resp["data"].toArray();
+            QJsonArray arr = resp["data"].toObject()["trend"].toArray();
             QVariantList trend;
             for (const QJsonValue &val : arr) {
                 trend.append(val.toVariant());
@@ -1298,7 +1298,7 @@ void ApiService::loadDashboardFull()
 {
     QUrl url(BASE_URL + "/api/v1/admin/dashboard/full");
     QNetworkRequest req(url);
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(30000);
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
@@ -1327,7 +1327,7 @@ void ApiService::loadVisitorInsight(const QString &startDate, const QString &end
     url.setQuery(query);
 
     QNetworkRequest req(url);
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(30000);
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
@@ -1356,7 +1356,7 @@ void ApiService::loadEmotionTrend(const QString &startDate, const QString &endDa
     url.setQuery(query);
 
     QNetworkRequest req(url);
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(30000);
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
@@ -1385,7 +1385,7 @@ void ApiService::loadFocusAnalysis(const QString &startDate, const QString &endD
     url.setQuery(query);
 
     QNetworkRequest req(url);
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(30000);
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
@@ -1414,7 +1414,7 @@ void ApiService::loadServiceSuggestions(const QString &startDate, const QString 
     url.setQuery(query);
 
     QNetworkRequest req(url);
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(30000);
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
     }
@@ -1438,7 +1438,7 @@ void ApiService::loadRecommendRoute(int userId)
 {
     QUrl url(BASE_URL + "/api/v1/recommend/route");
     QNetworkRequest req(url);
-    req.setTransferTimeout(15000);
+    req.setTransferTimeout(30000);
     req.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
     if (!m_authToken.isEmpty()) {
         req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
