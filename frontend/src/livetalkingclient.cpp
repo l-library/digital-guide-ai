@@ -41,7 +41,10 @@ LiveTalkingClient::LiveTalkingClient(QObject *parent)
     : QObject(parent)
 {
     m_audioFormat.setSampleRate(16000);
-    m_audioFormat.setChannelCount(1);
+    // 用双声道输出，规避 Linux PulseAudio/PipeWire 后端对 mono 流默认
+    // channel-map 映射到"仅左声道"导致的单边出声问题（Windows 直通不触发）。
+    // 后端推送的 PCM 仍是 mono，写入前于 processAudioFrame 做逐 sample 透传。
+    m_audioFormat.setChannelCount(2);
     m_audioFormat.setSampleFormat(QAudioFormat::Int16);
 
     m_displayTimer = new QTimer(this);
@@ -358,12 +361,23 @@ void LiveTalkingClient::processAudioFrame(const QByteArray &payload)
     }
 
     if (m_audioDevice) {
-        qint64 written = m_audioDevice->write(pcmData);
-        if (written != pcmData.size()) {
+        // 后端送来的 PCM 是 mono int16（每 sample 2 字节）。
+        // m_audioFormat 已设为 stereo，需把每 sample 复制成左右声道。
+        const int sampleCount = pcmData.size() / 2;
+        QByteArray stereoData;
+        stereoData.reserve(sampleCount * 4);
+        const char *src = pcmData.constData();
+        for (int i = 0; i < sampleCount; ++i) {
+            const char s[2] = {src[i * 2], src[i * 2 + 1]};
+            stereoData.append(s, 2);  // 左声道
+            stereoData.append(s, 2);  // 右声道
+        }
+        qint64 written = m_audioDevice->write(stereoData);
+        if (written != stereoData.size()) {
             static int partialCount = 0;
             partialCount++;
             if (partialCount <= 5 || partialCount % 50 == 0) {
-                qWarning() << "[音频] 部分写入! 期望:" << pcmData.size()
+                qWarning() << "[音频] 部分写入! 期望:" << stereoData.size()
                            << "实际:" << written << "累计:" << partialCount;
             }
         }
@@ -374,7 +388,8 @@ void LiveTalkingClient::setupAudio()
 {
     m_audioSink = new QAudioSink(m_audioFormat, this);
     m_audioSink->setVolume(1.0);
-    m_audioSink->setBufferSize(16000 * 2 * 1);  // 500ms buffer @ 16kHz int16 mono = 16000 samples
+    // 500ms 缓冲：16000 samples/s * 2 bytes * 2 channels
+    m_audioSink->setBufferSize(16000 * 2 * 2);
     m_audioDevice = m_audioSink->start();
     if (!m_audioDevice) {
         qWarning() << "LiveTalking: failed to start audio sink";
