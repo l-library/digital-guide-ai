@@ -1,0 +1,24 @@
+# =============================================================================
+# LiveTalking 数字人 — 运行时精简依赖清单
+#
+# 说明：
+#   经 AST 扫描 backend/LiveTalking/（wav2lip + edgetts + webrtc 模式），
+#   所有运行时实际被 import 的第三方包（aiohttp、aiortc、av、cv2、edge_tts、
+#   librosa、numpy、resampy、scipy、soundfile、torch、tqdm、aiohttp_middlewares
+#   等）都已在 backend/requirements.txt 中安装。
+#
+#   因此在主流部署模式下（wav2lip 数字人 + Edge TTS + WebRTC），
+#   本文件为空，不需要额外 pip install。
+#
+#   backend/LiveTalking/requirements.txt 是.upstream 完整依赖清单
+#   （含 wav2lip 训练、musetalk、dearpygui GUI、flask 等开发期包），
+#   直接 `pip install -r` 会引入 opencv-python（覆盖 headless 版）、
+#   typeguard==2.13.3 旧版固定可能破坏其他包，不推荐在运行时全量安装。
+#
+#   本文件保留给未来扩展使用：如启用 musetalk、 ZoeTalker 等额外
+#   avatar 模型，所需 diffusers / accelerate / onnxruntime-gpu 等
+#   请在本文件补充并显式声明，独立于主 backend/requirements.txt。
+# =============================================================================
+
+# 当前无额外运行时依赖。所有 wav2lip + edgetts + webrtc 模式需要的包
+# 已在 backend/requirements.txt 中涵盖。

@@ -1,0 +1,22 @@
+# =============================================================================
+# digital-guide-ai 后端 conda 环境定义
+#
+# 用法：
+#   conda env create -f backend/environment.yml
+#   conda activate DGA
+#
+# 说明：
+#   - 仅保留 conda 必须管理的核心（Python 解释器 + pip + 可选 ffmpeg）
+#   - PyTorch 因为需要 cu130 CUDA 运行库，统一由 bootstrap.sh 用 pip 显式安装
+#     不写进这里，避免 conda 求解器与 pip index 冲突
+#   - 其余 Python 依赖通过 backend/requirements.txt 安装
+# =============================================================================
+name: DGA
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip>=24.0
+  # 提示：以下两项与 OS 相关，bootstrap.sh 会按需尝试安装
+  # - ffmpeg>=5.0        # librosa / aiortc 解码音频需要
+  # - portaudio          # 部分音频后端可选

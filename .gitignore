@@ -2,6 +2,7 @@
 .env
 .env.*
 *.env.local
+!.env.example
 
 # ── Python 编译缓存 ──
 __pycache__/

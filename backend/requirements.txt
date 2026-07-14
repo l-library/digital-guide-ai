@@ -21,6 +21,11 @@ python-dotenv==1.2.2
 SQLAlchemy==2.0.49
 
 # ---------------------------------------------------------------------------
+# 配置文件解析
+# ---------------------------------------------------------------------------
+PyYAML==6.0.3                   # app/config/prompt_loader.py 读取 prompts.yaml
+
+# ---------------------------------------------------------------------------
 # RAG / 向量检索
 # ---------------------------------------------------------------------------
 langchain-community==0.4.2
@@ -93,6 +98,20 @@ pytest==9.0.3
 # 3. PyTorch CUDA 版本（当前安装 torch==2.11.0+cu130）
 #    如需 CPU only：将 torch/torchaudio 改为 cpu 版本
 #    pip install torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cpu
+#
+# 4. ffmpeg 系统二进制
+#    app/services/asr_service.py 与 tts_streaming.py 通过 subprocess 调用 ffmpeg
+#    非 pip 包，必须由 conda 或系统包管理器安装并出现在 PATH 中：
+#      conda install -c conda-forge ffmpeg       # 推荐
+#      sudo apt-get install ffmpeg                # Debian/Ubuntu
+#      brew install ffmpeg                        # macOS
+#
+# 5. LiveTalking 子项目运行时依赖
+#    经 AST 扫描，wav2lip + Edge TTS + WebRTC 模式所需第三方包已在本文件涵盖
+#    （aiohttp、aiortc、av、cv2、edge-tts、librosa、resampy、scipy、soundfile 等）。
+#    backend/LiveTalking/requirements.txt 是上游完整依赖（含训练/GUI），
+#    直接 pip install 会引入冲突，不要照搬安装。
+#    运行时子集清单见 backend/LiveTalking/requirements-runtime.txt
 
 # ---------------------------------------------------------------------------
 # 认证 / JWT
