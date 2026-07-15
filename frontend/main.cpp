@@ -21,6 +21,8 @@
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    QCoreApplication::setOrganizationName("DigitalGuideAI");
+    QCoreApplication::setApplicationName("DigitalGuideAI");
     QQuickStyle::setStyle("Material");
 
     ApiService::instance();

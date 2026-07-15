@@ -22,6 +22,41 @@ SettingsManager::SettingsManager(QObject *parent)
     });
 }
 
+// ── 服务器地址配置（通过 ConfigManager 读写 QSettings）──
+
+QString SettingsManager::backendIp() const
+{
+    return ConfigManager::getBackendIP();
+}
+
+void SettingsManager::setBackendIp(const QString &ip)
+{
+    ConfigManager::setBackendIP(ip);
+    emit backendIpChanged();
+}
+
+int SettingsManager::backendPort() const
+{
+    return ConfigManager::getBackendPort();
+}
+
+void SettingsManager::setBackendPort(int port)
+{
+    ConfigManager::setBackendPort(port);
+    emit backendPortChanged();
+}
+
+void SettingsManager::saveServerConfig(const QString &ip, int port)
+{
+    ConfigManager::setBackendIP(ip);
+    ConfigManager::setBackendPort(port);
+    // LiveTalking 自动跟随：同一 IP，8010 端口
+    ConfigManager::setLiveTalkingHost(ip);
+    ConfigManager::setLiveTalkingPort(8010);
+    ApiService::instance().refreshServerUrl();
+    emit serverConfigSaved();
+}
+
 QVariantList SettingsManager::knowledgeDocs() const
 {
     return m_knowledgeDocs;

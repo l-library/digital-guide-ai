@@ -12,63 +12,84 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
-// 读取配置文件
+#include <QSettings>
+
+// 读取配置文件。优先级：QSettings（用户运行时设置）> config.json（打包默认）> 硬编码默认值。
+// setter 方法写入 QSettings，跨平台持久化（桌面端写 INI/注册表，Android 写 SharedPreferences）。
 class ConfigManager
 {
 public:
+    // ── Backend IP ──
     static QString getBackendIP()
     {
-        QFile file("config.json");
-        if (!file.open(QIODevice::ReadOnly)) {
-            qWarning() << "Fail to read config.json!";
-            return "127.0.0.1"; // 默认值
-        }
+        QSettings settings;
+        if (settings.contains("backend/ip"))
+            return settings.value("backend/ip").toString();
 
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-        QJsonObject obj = doc.object();
-        QString IP = obj["backend"].toObject()["ip"].toString();
-        return IP;
+        QFile file("config.json");
+        if (file.open(QIODevice::ReadOnly)) {
+            QJsonObject obj = QJsonDocument::fromJson(file.readAll()).object();
+            QString ip = obj["backend"].toObject()["ip"].toString();
+            if (!ip.isEmpty()) return ip;
+        }
+        return "http://localhost";
     }
+    static void setBackendIP(const QString &ip)
+    {
+        QSettings settings;
+        settings.setValue("backend/ip", ip);
+    }
+
+    // ── Backend Port ──
     static int getBackendPort()
     {
-        QFile file("config.json");
-        if (!file.open(QIODevice::ReadOnly)) {
-            qWarning() << "Fail to read config.json!";
-            return 8000;
-        }
+        QSettings settings;
+        if (settings.contains("backend/port"))
+            return settings.value("backend/port").toInt();
 
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-        QJsonObject obj = doc.object();
-        int Port = obj["backend"].toObject()["port"].toInt();
-        return Port;
+        QFile file("config.json");
+        if (file.open(QIODevice::ReadOnly)) {
+            QJsonObject obj = QJsonDocument::fromJson(file.readAll()).object();
+            int port = obj["backend"].toObject()["port"].toInt();
+            if (port > 0) return port;
+        }
+        return 8000;
     }
+    static void setBackendPort(int port)
+    {
+        QSettings settings;
+        settings.setValue("backend/port", port);
+    }
+
+    // ── LiveTalking Host ──
     static QString getLiveTalkingHost()
     {
-        QFile file("config.json");
-        if (!file.open(QIODevice::ReadOnly)) {
-            qWarning() << "Fail to read config.json!";
-            return "127.0.0.1";
-        }
+        QSettings settings;
+        if (settings.contains("livetalking/host"))
+            return settings.value("livetalking/host").toString();
 
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-        QJsonObject obj = doc.object();
-        QString host = obj["livetalking"].toObject()["host"].toString();
-        if (host.isEmpty()) host = "127.0.0.1";
-        return host;
+        // 无独立配置时，复用后端 IP
+        return getBackendIP();
     }
+    static void setLiveTalkingHost(const QString &host)
+    {
+        QSettings settings;
+        settings.setValue("livetalking/host", host);
+    }
+
+    // ── LiveTalking Port ──
     static int getLiveTalkingPort()
     {
-        QFile file("config.json");
-        if (!file.open(QIODevice::ReadOnly)) {
-            qWarning() << "Fail to read config.json!";
-            return 8010;
-        }
+        QSettings settings;
+        if (settings.contains("livetalking/port"))
+            return settings.value("livetalking/port").toInt();
 
-        QJsonDocument doc = QJsonDocument::fromJson(file.readAll());
-        QJsonObject obj = doc.object();
-        int port = obj["livetalking"].toObject()["port"].toInt();
-        if (port == 0) port = 8010;
-        return port;
+        return 8010; // 默认端口
+    }
+    static void setLiveTalkingPort(int port)
+    {
+        QSettings settings;
+        settings.setValue("livetalking/port", port);
     }
 };
 
@@ -77,6 +98,9 @@ class ApiService : public QObject
     Q_OBJECT
 public:
     static ApiService &instance();
+
+    // 刷新服务器配置（QSettings 变更后调用，重建 BASE_URL）
+    Q_INVOKABLE void refreshServerUrl();
 
     // Auth
     void login(const QString &username, const QString &password);

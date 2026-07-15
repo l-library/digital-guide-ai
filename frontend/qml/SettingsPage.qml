@@ -324,6 +324,70 @@ Page {
                 }
             }
 
+            // ── 服务器地址配置 ──
+            GroupBox {
+                title: qsTr("服务器地址")
+                Layout.fillWidth: true
+                Material.elevation: 2
+
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 12
+
+                    RowLayout {
+                        spacing: 12
+
+                        Label {
+                            text: qsTr("地址")
+                            font.pixelSize: 14
+                            Layout.preferredWidth: 60
+                        }
+
+                        TextField {
+                            id: serverIpField
+                            Layout.fillWidth: true
+                            font.pixelSize: 14
+                            placeholderText: qsTr("http://localhost")
+                            text: settingsManager.backendIp
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: 12
+
+                        Label {
+                            text: qsTr("端口")
+                            font.pixelSize: 14
+                            Layout.preferredWidth: 60
+                        }
+
+                        TextField {
+                            id: serverPortField
+                            Layout.fillWidth: true
+                            font.pixelSize: 14
+                            placeholderText: "8000"
+                            text: settingsManager.backendPort
+                            validator: IntValidator { bottom: 1; top: 65535 }
+                            inputMethodHints: Qt.ImhDigitsOnly
+                        }
+                    }
+
+                    RowLayout {
+                        Item { Layout.fillWidth: true }
+
+                        Button {
+                            text: qsTr("保存服务器地址")
+                            font.pixelSize: 14
+                            enabled: serverIpField.text.length > 0 && serverPortField.text.length > 0
+                            onClicked: {
+                                settingsManager.saveServerConfig(serverIpField.text, parseInt(serverPortField.text))
+                                serverConfigSavedDialog.open()
+                            }
+                        }
+                    }
+                }
+            }
+
             GroupBox {
                 visible: loginManager.currentUser && loginManager.currentUser.role === "admin"
                 title: qsTr("知识库管理")
@@ -458,6 +522,19 @@ Page {
 
         Label {
             text: qsTr("个人资料已保存")
+            font.pixelSize: 14
+        }
+    }
+
+    Dialog {
+        id: serverConfigSavedDialog
+        title: qsTr("提示")
+        standardButtons: Dialog.Ok
+        modal: true
+        anchors.centerIn: parent
+
+        Label {
+            text: qsTr("服务器地址已保存")
             font.pixelSize: 14
         }
     }
