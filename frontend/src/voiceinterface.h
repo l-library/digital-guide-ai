@@ -2,11 +2,7 @@
 #define VOICEINTERFACE_H
 
 #include <QObject>
-#include <QUrl>
-
-class QMediaCaptureSession;
-class QMediaRecorder;
-class QAudioInput;
+#include <QProcess>
 
 class VoiceInterface : public QObject
 {
@@ -41,10 +37,8 @@ signals:
 
 private:
     VoiceState m_state = Idle;
-    QMediaCaptureSession *m_captureSession = nullptr;
-    QMediaRecorder *m_recorder = nullptr;
-    QAudioInput *m_audioInput = nullptr;
-    QString m_outputPath;
+    QProcess *m_recordProcess = nullptr;
+    QString m_outputFilePath;
 
     void setState(VoiceState newState);
     void setupRecording();

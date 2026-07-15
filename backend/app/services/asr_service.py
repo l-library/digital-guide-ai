@@ -28,7 +28,7 @@ def _get_model():
 
 def transcribe_audio(audio_path: str) -> str:
     """
-    将音频文件转为文本（含语境增强）
+    将音频文件转为文本
     """
     import subprocess
 
@@ -40,14 +40,8 @@ def transcribe_audio(audio_path: str) -> str:
         subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
 
         model = _get_model()
-        prompt_text = "这是一段关于无锡灵山景点的旅游咨询对话。关键词包含：灵山胜境、灵山、门票、历史由来、九龙灌浴、梵宫等。"
-
-        result = model.transcribe(
-            abs_path,
-            language="zh",
-            initial_prompt=prompt_text,
-        )
-        return result["text"]
+        result = model.transcribe(abs_path, language="zh")
+        return result["text"].strip()
     except FileNotFoundError:
         return "语音识别失败: 未找到 ffmpeg，请安装 ffmpeg 并将其添加到系统 PATH"
     except subprocess.CalledProcessError:

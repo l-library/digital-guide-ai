@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import os
+import subprocess
 import time
 import json
 import asyncio
@@ -286,7 +287,7 @@ async def handle_voice_chat(
         async def event_generator():
             try:
                 user_text = await asyncio.to_thread(transcribe_audio, input_audio_path)
-                pass  # print intentionally removed (user content privacy)
+                logger.info(f"[语音端点 /chat_voice] ASR识别结果({len(audio_bytes)}字节): {user_text}")
 
                 if user_text.startswith("语音识别失败:"):
                     yield f"data: {json.dumps({'type': 'error', 'conversation_id': conversation_id, 'message': user_text}, ensure_ascii=False)}\n\n"
@@ -392,10 +393,44 @@ async def handle_voice_stream(
         with open(input_audio_path, "wb") as f:
             f.write(audio_bytes)
 
+        # 诊断: 保存永久副本 + 检测音量
+        diag_path = os.path.join(TEMP_AUDIO_DIR, "diag_last_recording.wav")
+        with open(diag_path, "wb") as f:
+            f.write(audio_bytes)
+        logger.info(
+            f"[语音端点] 收到音频: 大小={len(audio_bytes)}字节, "
+            f"文件名={audio.filename}, 保存至={input_audio_path}, "
+            f"诊断副本={diag_path}"
+        )
+
+        # 用 ffprobe 检测音频是否有实际声音
+        try:
+            probe = subprocess.run(
+                [
+                    "ffprobe", "-v", "error",
+                    "-f", "lavfi",
+                    "-i", f"amovie={input_audio_path},volumedetect",
+                    "-f", "null", "-",
+                ],
+                capture_output=True, text=True, timeout=5,
+            )
+            # volumedetect 输出到 stderr
+            import re
+            match = re.search(r"max_volume:\s*([-\d.]+)\s*dB", probe.stderr)
+            if match:
+                max_db = float(match.group(1))
+                logger.info(f"[语音端点] 音频音量检测: max_volume={max_db} dB")
+                if max_db < -30:
+                    logger.warning(f"[语音端点] 音频音量极低 ({max_db} dB)，可能录到了静音")
+            else:
+                logger.info(f"[语音端点] 音量检测: 未获取到 max_volume")
+        except Exception as e:
+            logger.warning(f"[语音端点] 音量检测失败: {e}")
+
         async def event_generator():
             try:
                 user_text = await asyncio.to_thread(transcribe_audio, input_audio_path)
-                pass  # print intentionally removed (user content privacy)
+                logger.info(f"[语音端点 /chat/voice_stream] ASR识别结果({len(audio_bytes)}字节): {user_text}")
 
                 if user_text.startswith("语音识别失败:"):
                     yield f"data: {json.dumps({'type': 'error', 'conversation_id': conversation_id, 'message': user_text}, ensure_ascii=False)}\n\n"

@@ -7,7 +7,7 @@ Item {
     Image {
         id: videoImage
         anchors.fill: parent
-        fillMode: Image.PreserveAspectFit
+        fillMode: Image.PreserveAspectCrop
         cache: false
         visible: liveTalkingClient && liveTalkingClient.connected
         source: ""

@@ -128,6 +128,19 @@ Page {
                         }
                     }
 
+                    Text {
+                        text: qsTr("服务器设置")
+                        color: "#999"
+                        font.pixelSize: 12
+                        Layout.alignment: Qt.AlignHCenter
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: serverConfigDialog.open()
+                        }
+                    }
+
                     Button {
                         id: loginBtn
                         Layout.fillWidth: true
@@ -185,6 +198,50 @@ Page {
                     }
                 }
             }
+        }
+    }
+
+    Dialog {
+        id: serverConfigDialog
+        title: qsTr("服务器地址")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 40, 350)
+
+        ColumnLayout {
+            width: parent.width
+            spacing: 12
+
+            Label {
+                text: qsTr("地址")
+                font.pixelSize: 14
+            }
+
+            TextField {
+                id: configIpField
+                Layout.fillWidth: true
+                font.pixelSize: 14
+                text: settingsManager.backendIp
+            }
+
+            Label {
+                text: qsTr("端口")
+                font.pixelSize: 14
+            }
+
+            TextField {
+                id: configPortField
+                Layout.fillWidth: true
+                font.pixelSize: 14
+                text: settingsManager.backendPort
+                validator: IntValidator { bottom: 1; top: 65535 }
+                inputMethodHints: Qt.ImhDigitsOnly
+            }
+        }
+
+        onAccepted: {
+            settingsManager.saveServerConfig(configIpField.text, parseInt(configPortField.text))
         }
     }
 }
