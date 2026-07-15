@@ -1318,6 +1318,31 @@ void ApiService::loadDashboardFull()
     });
 }
 
+void ApiService::loadConsumptionFull()
+{
+    // 可选日期范围参数 start_date/end_date（YYYY-MM-DD）；这里取全部记录
+    QUrl url(BASE_URL + "/api/v1/admin/consumption/full");
+    QNetworkRequest req(url);
+    req.setTransferTimeout(30000);
+    if (!m_authToken.isEmpty()) {
+        req.setRawHeader("Authorization", ("Bearer " + m_authToken).toUtf8());
+    }
+    QNetworkReply *reply = m_networkManager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            emit apiError("获取消费分析数据失败");
+            return;
+        }
+        QJsonObject resp = QJsonDocument::fromJson(reply->readAll()).object();
+        if (resp["code"].toInt() == 200) {
+            emit consumptionFullLoaded(resp["data"].toObject().toVariantMap());
+        } else {
+            emit apiError(resp["message"].toString());
+        }
+    });
+}
+
 void ApiService::loadVisitorInsight(const QString &startDate, const QString &endDate)
 {
     QUrl url(BASE_URL + "/api/v1/admin/reports/visitor-insight");

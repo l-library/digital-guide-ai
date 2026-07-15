@@ -145,6 +145,9 @@ public:
     void loadSatisfactionTrend(const QString &period);
     void loadDashboardFull();
 
+    // Consumption analytics
+    void loadConsumptionFull();
+
     // Reports
     void loadVisitorInsight(const QString &startDate, const QString &endDate);
     void loadEmotionTrend(const QString &startDate, const QString &endDate);
@@ -226,6 +229,9 @@ signals:
     void hotQuestionsLoaded(const QVariantList &items);
     void satisfactionTrendLoaded(const QString &period, const QVariantList &trend);
     void dashboardFullLoaded(const QVariantMap &data);
+
+    // Consumption analytics
+    void consumptionFullLoaded(const QVariantMap &data);
 
     // Reports
     void visitorInsightLoaded(const QVariantMap &data);

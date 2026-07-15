@@ -31,6 +31,7 @@ qt_add_executable(appdigital_guide_ai
     src/dashboardmanager.cpp
     src/reportmanager.cpp
     src/recommendmanager.cpp
+    src/consumptionmanager.cpp
     res.qrc
 )
 
@@ -49,8 +50,9 @@ qt_add_qml_module(appdigital_guide_ai
         qml/DashboardTab.qml
         qml/ReportTab.qml
         qml/RecommendTab.qml
+        qml/ConsumptionTab.qml
 
-        SOURCES src/adminmanager.cpp src/adminmanager.h src/apiservice.cpp src/apiservice.h src/conversationmanager.cpp src/conversationmanager.h src/historymanager.cpp src/historymanager.h src/loginmanager.cpp src/loginmanager.h src/settingsmanager.cpp src/settingsmanager.h src/voiceinterface.cpp src/voiceinterface.h src/audioplayer.cpp src/audioplayer.h src/livetalkingclient.cpp src/livetalkingclient.h src/dashboardmanager.cpp src/dashboardmanager.h src/reportmanager.cpp src/reportmanager.h src/recommendmanager.cpp src/recommendmanager.h
+        SOURCES src/adminmanager.cpp src/adminmanager.h src/apiservice.cpp src/apiservice.h src/conversationmanager.cpp src/conversationmanager.h src/historymanager.cpp src/historymanager.h src/loginmanager.cpp src/loginmanager.h src/settingsmanager.cpp src/settingsmanager.h src/voiceinterface.cpp src/voiceinterface.h src/audioplayer.cpp src/audioplayer.h src/livetalkingclient.cpp src/livetalkingclient.h src/dashboardmanager.cpp src/dashboardmanager.h src/reportmanager.cpp src/reportmanager.h src/recommendmanager.cpp src/recommendmanager.h src/consumptionmanager.cpp src/consumptionmanager.h
         QML_FILES
 )
 

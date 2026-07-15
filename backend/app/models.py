@@ -3,7 +3,7 @@
 """
 import json
 from datetime import datetime
-from sqlalchemy import Boolean, Column, Integer, String, Text, DateTime, ForeignKey, JSON, func
+from sqlalchemy import Boolean, Column, Date, Float, Integer, String, Text, DateTime, ForeignKey, JSON, func
 from app.database import Base
 
 
@@ -136,3 +136,52 @@ class RecommendLog(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     interests_used = Column(String(512), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class VisitorConsumption(Base):
+    """游客消费记录表（用于管理端消费分析/营销决策展示）
+
+    数据来源：backend/data/data.csv（灵山胜境游客消费模拟数据）。
+    设计参考 api.md 第二章的响应信封规范，to_dict() 输出可直接作为 `data` 字段。
+    """
+    __tablename__ = "visitor_consumption"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tourist_id = Column(String(16), nullable=False, index=True)           # 例: U00055
+    user_nickname = Column(String(64), nullable=True)                    # 游客昵称
+    age = Column(Integer, nullable=True)                                 # 年龄
+    gender = Column(String(4), nullable=True)                            # 男/女
+    attraction_name = Column(String(64), nullable=True)                   # 景点名称
+    attraction_type = Column(String(64), nullable=True)                   # 景点类型
+    visit_date = Column(Date, nullable=False, index=True)                 # 到访日期
+    stay_duration = Column(Float, nullable=True)                          # 停留时长（小时）
+    ticket_cost = Column(Float, nullable=False, default=0)                # 门票消费
+    food_cost = Column(Float, nullable=False, default=0)                  # 餐饮消费
+    shopping_cost = Column(Float, nullable=False, default=0)              # 购物消费
+    transport_cost = Column(Float, nullable=False, default=0)             # 交通消费
+    entertainment_cost = Column(Float, nullable=False, default=0)         # 娱乐消费
+    total_cost = Column(Float, nullable=False, default=0)                 # 总消费
+    group_size = Column(Integer, nullable=True)                           # 同行人数
+    satisfaction = Column(Integer, nullable=True)                        # 满意度 1-5
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "tourist_id": self.tourist_id,
+            "user_nickname": self.user_nickname,
+            "age": self.age,
+            "gender": self.gender,
+            "attraction_name": self.attraction_name,
+            "attraction_type": self.attraction_type,
+            "visit_date": self.visit_date.isoformat() if self.visit_date else None,
+            "stay_duration": self.stay_duration,
+            "ticket_cost": self.ticket_cost,
+            "food_cost": self.food_cost,
+            "shopping_cost": self.shopping_cost,
+            "transport_cost": self.transport_cost,
+            "entertainment_cost": self.entertainment_cost,
+            "total_cost": self.total_cost,
+            "group_size": self.group_size,
+            "satisfaction": self.satisfaction,
+        }

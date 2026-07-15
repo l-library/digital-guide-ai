@@ -56,6 +56,9 @@ Page {
         TabButton {
             text: qsTr("游客报告")
         }
+        TabButton {
+            text: qsTr("消费分析")
+        }
     }
 
     // ════════════════════════════════════════════════════
@@ -363,6 +366,13 @@ Page {
             id: reportLoader
             active: tabView.currentIndex === 2
             source: "ReportTab.qml"
+        }
+
+        // ── 标签页 3：消费分析（懒加载）────────────────────
+        Loader {
+            id: consumptionLoader
+            active: tabView.currentIndex === 3
+            source: "ConsumptionTab.qml"
         }
     }
 
